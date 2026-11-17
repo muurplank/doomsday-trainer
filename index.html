@@ -502,10 +502,10 @@ function answer(v) {
   const fb = document.getElementById('fb');
   fb.className = 'fb ' + (ok ? 'ok' : 'no');
   fb.innerHTML = `<div class="verdict">${ok ? '✓ Goed' : `✗ Fout — het is ${q.show}`} <span class="muted" style="font-weight:400;font-size:14px">· ${t.toFixed(1)} s</span></div>
-    <div class="why">${q.why}</div>${ok ? '' : '<button class="btn primary" id="nextq">Volgende (Enter)</button>'}`;
+    <div class="why">${q.why}</div>`;
   refreshStats();
   if (!c.wasMastered && mastered(c.lvl.id)) { c.wasMastered = true; c.banner = true; showBanner(); }
-  if (ok) c.timer = setTimeout(() => { if (cur === c && c.state === 'fb') ask(); }, 500);
+  c.timer = setTimeout(() => { if (cur === c && c.state === 'fb') ask(); }, ok ? 500 : 2000);
 }
 
 function showBanner() {
