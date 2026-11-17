@@ -1,0 +1,579 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Doomsday trainer</title>
+<style>
+  :root {
+    --bg: #f6f4ef; --card: #ffffff; --ink: #1d1c1a; --muted: #6d6a63; --line: #e2ded4;
+    --accent: #3f4bd1; --accent-ink: #ffffff; --accent-soft: #e6e8fb;
+    --good: #1f8a4c; --good-soft: #def3e5; --bad: #c0392b; --bad-soft: #fbe3df;
+    --gold: #b7791f;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #15161a; --card: #1f2127; --ink: #eceae4; --muted: #9a978f; --line: #30333c;
+      --accent: #8b95ff; --accent-ink: #12131a; --accent-soft: #2a2e52;
+      --good: #5fd08c; --good-soft: #1d3a29; --bad: #ff8577; --bad-soft: #45231f;
+      --gold: #e6b655;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+    font: 16px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 860px; margin: 0 auto; padding: 28px 16px 60px; }
+  h1 { font-size: 28px; margin: 0 0 4px; letter-spacing: -0.02em; }
+  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 28px 0 10px; }
+  p { margin: 0 0 10px; }
+  .muted { color: var(--muted); }
+  button { font: inherit; color: inherit; cursor: pointer; }
+  .btn { border: 1px solid var(--line); background: var(--card); border-radius: 10px; padding: 9px 16px; }
+  .btn:hover { border-color: var(--accent); }
+  .btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
+  .btn.link { border: 0; background: none; padding: 4px 0; color: var(--muted); text-decoration: underline; }
+
+  .top { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap; }
+  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--card); }
+  .seg button { border: 0; background: none; padding: 7px 12px; font-size: 14px; }
+  .seg button.on { background: var(--accent); color: var(--accent-ink); }
+
+  .next { margin-top: 20px; background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+    padding: 16px 18px; display: flex; justify-content: space-between; align-items: center; gap: 14px; flex-wrap: wrap; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 12px; }
+  .card { text-align: left; background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px;
+    display: flex; flex-direction: column; gap: 6px; min-height: 132px; }
+  .card:hover { border-color: var(--accent); }
+  .card .row { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .card .num { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .card .title { font-weight: 650; font-size: 17px; }
+  .card .desc { font-size: 14px; color: var(--muted); flex: 1; }
+  .badge { font-size: 11px; padding: 2px 8px; border-radius: 99px; border: 1px solid var(--line); color: var(--muted); white-space: nowrap; }
+  .badge.done { background: var(--good-soft); color: var(--good); border-color: transparent; }
+  .badge.busy { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
+  .combo { font-size: 11px; color: var(--gold); font-weight: 600; text-transform: uppercase; letter-spacing: .05em; }
+  .dots { display: flex; gap: 4px; }
+  .dots i { width: 9px; height: 9px; border-radius: 50%; background: var(--line); }
+  .dots i.ok { background: var(--good); } .dots i.no { background: var(--bad); }
+
+  .bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+  .stats { display: flex; gap: 18px; align-items: center; font-size: 14px; color: var(--muted); flex-wrap: wrap; }
+  .stats b { color: var(--ink); font-variant-numeric: tabular-nums; }
+  details.uitleg { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 12px 16px; margin-bottom: 14px; }
+  details.uitleg summary { cursor: pointer; font-weight: 600; }
+  details.uitleg .body { margin-top: 10px; font-size: 15px; }
+  details.uitleg ul { margin: 6px 0 10px; padding-left: 20px; }
+  table.t { border-collapse: collapse; margin: 8px 0 10px; font-variant-numeric: tabular-nums; }
+  table.t td, table.t th { border: 1px solid var(--line); padding: 4px 10px; text-align: center; font-size: 14px; }
+  table.t th { color: var(--muted); font-weight: 500; }
+  .scroll { overflow-x: auto; }
+
+  .quiz { background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 30px 20px 24px; text-align: center; }
+  .tag { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; min-height: 18px; }
+  .ask { font-size: 15px; color: var(--muted); margin-top: 4px; }
+  .big { font-size: clamp(34px, 8vw, 56px); font-weight: 700; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; margin: 6px 0 2px; line-height: 1.15; }
+  .small { font-size: 15px; color: var(--muted); min-height: 22px; }
+  .choices { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 22px; }
+  .choices button { min-width: 64px; padding: 12px 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--bg); font-size: 17px; }
+  .choices button:hover:not(:disabled) { border-color: var(--accent); }
+  .choices button b { font-size: 19px; }
+  .choices button.right { background: var(--good-soft); border-color: var(--good); color: var(--good); }
+  .choices button.wrong { background: var(--bad-soft); border-color: var(--bad); color: var(--bad); }
+  .choices button:disabled { cursor: default; }
+  form.num { display: flex; justify-content: center; gap: 8px; margin-top: 22px; }
+  form.num input { width: 120px; font: inherit; font-size: 24px; text-align: center; padding: 8px; border-radius: 12px;
+    border: 1px solid var(--line); background: var(--bg); color: var(--ink); }
+  form.num input:focus { outline: 2px solid var(--accent); border-color: transparent; }
+  .fb { margin-top: 20px; min-height: 96px; }
+  .fb .verdict { font-weight: 700; font-size: 18px; }
+  .fb.ok .verdict { color: var(--good); } .fb.no .verdict { color: var(--bad); }
+  .fb .why { margin: 8px auto 12px; max-width: 560px; font-size: 15px; text-align: left; background: var(--bg);
+    border-radius: 12px; padding: 10px 14px; font-variant-numeric: tabular-nums; }
+  .fb .why div + div { margin-top: 3px; }
+  .hint { font-size: 13px; color: var(--muted); margin-top: 14px; }
+  .banner { background: var(--good-soft); color: var(--good); border-radius: 14px; padding: 12px 16px; margin-bottom: 14px;
+    display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; font-weight: 600; }
+  kbd { font: inherit; font-size: 12px; border: 1px solid var(--line); border-radius: 5px; padding: 0 5px; background: var(--bg); }
+  footer { margin-top: 34px; font-size: 13px; color: var(--muted); display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+</style>
+</head>
+<body>
+<main id="app"></main>
+
+<script id="logic">
+// ---------- Pure doomsday-logica ----------
+const DAYS = ['zondag','maandag','dinsdag','woensdag','donderdag','vrijdag','zaterdag'];
+const DS = ['zo','ma','di','wo','do','vr','za'];
+const MONTHS = ['januari','februari','maart','april','mei','juni','juli','augustus','september','oktober','november','december'];
+const mod = (n, m) => ((n % m) + m) % m;
+const isLeap = y => (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
+const centuryAnchor = c => [2, 0, 5, 3][mod(c, 4)];
+function yyParts(yy) {
+  const q = Math.floor(yy / 12), r = yy % 12, f = Math.floor(r / 4), total = q + r + f;
+  return { yy, q, r, f, total, off: total % 7 };
+}
+function yearParts(y) {
+  const c = Math.floor(y / 100), anchor = centuryAnchor(c), p = yyParts(y % 100);
+  return { ...p, c, anchor, dd: (anchor + p.off) % 7 };
+}
+const monthAnchor = (m, leap) => [leap ? 4 : 3, leap ? 29 : 28, 14, 4, 9, 6, 11, 8, 5, 10, 7, 12][m - 1];
+const daysIn = (m, leap) => [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][m - 1];
+const weekdayOf = (y, m, d) => mod(yearParts(y).dd + d - monthAnchor(m, isLeap(y)), 7);
+</script>
+
+<script>
+// ---------- Hulpjes ----------
+const rnd = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
+const pick = arr => arr[rnd(0, arr.length - 1)];
+function wpick(items, weights) {
+  let t = weights.reduce((a, b) => a + b, 0) * Math.random();
+  for (let i = 0; i < items.length; i++) { t -= weights[i]; if (t < 0) return items[i]; }
+  return items[items.length - 1];
+}
+const cap = s => s[0].toUpperCase() + s.slice(1);
+const dayLabel = i => `<b>${DAYS[i]}</b> (${i})`;
+
+const C_WEEK = DAYS.map((d, i) => ({ v: i, label: `<b>${i}</b> ${DS[i]}`, key: String(i) }));
+const C_07 = [0,1,2,3,4,5,6].map(i => ({ v: i, label: `<b>${i}</b>`, key: String(i) }));
+const C_08 = [0,1,2,3,4,5,6,7,8].map(i => ({ v: i, label: `<b>${i}</b>`, key: String(i) }));
+const C_NAMES = DAYS.map((d, i) => ({ v: i, label: cap(d) }));
+const C_YN = [{ v: 1, label: '<b>Ja</b> <kbd>J</kbd>', key: 'j' }, { v: 0, label: '<b>Nee</b> <kbd>N</kbd>', key: 'n' }];
+
+// ---------- Opslag ----------
+const KEY = 'doomsday-trainer-v1';
+let S = { levels: {}, range: 'wide' };
+try { S = Object.assign(S, JSON.parse(localStorage.getItem(KEY) || '{}')); } catch (e) {}
+// Via start.command (server.py) gaat alles direct naar schijf; als los bestand geopend blijft het in de browser.
+const SERVER = typeof location !== 'undefined' && ['localhost', '127.0.0.1'].includes(location.hostname);
+
+// GitHub-opslag: log + voortgang in een (privé) repo, zodat het op elk apparaat hetzelfde is.
+const DEFAULT_REPO = 'muurplank/doomsday-data';
+const GHKEY = 'doomsday-trainer-gh';
+const HEADER = ['Timestamp', 'Onderdeel', 'Bron', 'Vraag', 'Antwoord', 'Juist antwoord', 'Goed', 'Tijd (s)'];
+const csvCell = v => /[",\n;]/.test(String(v)) ? `"${String(v).replace(/"/g, '""')}"` : String(v);
+const csvRow = r => r.map(csvCell).join(',');
+let GH = null;
+try { GH = JSON.parse(localStorage.getItem(GHKEY)); } catch (e) {}
+let stateDirty = false, flushing = false, flushTimer = null, syncErr = null;
+const b64e = s => { let o = ''; for (const x of new TextEncoder().encode(s)) o += String.fromCharCode(x); return btoa(o); };
+const b64d = s => new TextDecoder().decode(Uint8Array.from(atob(s.replace(/\s/g, '')), ch => ch.charCodeAt(0)));
+const ghErr = st => new Error(st === 401 ? 'token ongeldig of verlopen' : st === 404 || st === 403 ? 'geen toegang tot de repo' : 'GitHub-fout ' + st);
+function ghFetch(url, opt = {}) {
+  return fetch('https://api.github.com/repos/' + GH.repo + url, { ...opt, cache: 'no-store',
+    headers: { Authorization: 'Bearer ' + GH.token, Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28' } });
+}
+async function ghRead(path) {
+  const r = await ghFetch('/contents/' + path);
+  if (r.status === 404) return { text: null, sha: null };
+  if (!r.ok) throw ghErr(r.status);
+  const j = await r.json();
+  return { text: b64d(j.content), sha: j.sha };
+}
+async function ghWrite(path, text, sha, message) {
+  const r = await ghFetch('/contents/' + path, { method: 'PUT', body: JSON.stringify({ message, content: b64e(text), ...(sha ? { sha } : {}) }) });
+  if (!r.ok) throw ghErr(r.status);
+}
+const syncText = () => !GH ? '' : syncErr ? `⚠ niet gesynct: ${syncErr}` : (LOG.length || stateDirty) ? `↑ ${LOG.length} te versturen` : '✓ opgeslagen op GitHub';
+function updateSync() { const el = document.getElementById('sync'); if (el) el.textContent = syncText(); }
+function scheduleFlush(ms = 20000) { if (GH && !flushTimer) flushTimer = setTimeout(() => { flushTimer = null; flush(); }, ms); updateSync(); }
+async function flush() {
+  if (!GH || flushing) return;
+  flushing = true;
+  try {
+    const byMonth = {};
+    LOG.slice().forEach(r => (byMonth[r[0].slice(0, 7)] ||= []).push(r));
+    for (const m in byMonth) {
+      const path = `doomsday_log_${m}.csv`, f = await ghRead(path);
+      await ghWrite(path, (f.text ?? HEADER.join(',') + '\n') + byMonth[m].map(csvRow).join('\n') + '\n', f.sha, `log: ${byMonth[m].length} pogingen`);
+      LOG = LOG.filter(r => !byMonth[m].includes(r));
+      try { localStorage.setItem(LOGKEY, JSON.stringify(LOG)); } catch (e) {}
+    }
+    if (stateDirty) {
+      stateDirty = false;
+      try { const f = await ghRead('voortgang.json'); await ghWrite('voortgang.json', JSON.stringify(S), f.sha, 'voortgang'); }
+      catch (e) { stateDirty = true; throw e; }
+    }
+    syncErr = null;
+  } catch (e) { syncErr = e.message || 'geen verbinding'; }
+  flushing = false;
+  if (LOG.length || stateDirty) scheduleFlush(syncErr ? 60000 : 20000);
+  updateSync();
+}
+async function ghConnect(repo, token) {
+  GH = { repo, token };
+  const r = await ghFetch('').catch(() => null);
+  if (!r || !r.ok) { GH = null; throw r ? ghErr(r.status) : new Error('geen verbinding'); }
+  localStorage.setItem(GHKEY, JSON.stringify(GH));
+}
+const post = (url, data) => fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) })
+  .then(r => { if (!r.ok) throw new Error(r.status); });
+let diskOk = SERVER;
+const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {}
+  if (GH) { stateDirty = true; scheduleFlush(); } else if (SERVER) post('/state', S).catch(() => {}); };
+// Logboek: elke poging als rij, te downloaden als CSV
+const LOGKEY = 'doomsday-trainer-log-v1';
+let LOG = [];
+try { LOG = JSON.parse(localStorage.getItem(LOGKEY) || '[]'); } catch (e) {}
+const pad2 = n => String(n).padStart(2, '0');
+const stamp = (d = new Date()) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())} ${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`;
+const plain = s => String(s).replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
+const keepLocal = row => { LOG.push(row); try { localStorage.setItem(LOGKEY, JSON.stringify(LOG)); } catch (e) {} };
+function logAttempt(row) {
+  if (GH) { keepLocal(row); return scheduleFlush(); }
+  if (!SERVER) return keepLocal(row);
+  post('/log', row).then(() => { diskOk = true; }).catch(() => { diskOk = false; keepLocal(row); warnDisk(); });
+}
+function warnDisk() {
+  const b = document.getElementById('banner');
+  if (b && !b.querySelector('.err')) b.insertAdjacentHTML('afterbegin',
+    '<div class="banner err" style="background:var(--bad-soft);color:var(--bad)">Kan niet naar doomsday_log.csv schrijven — draait start.command nog? Pogingen worden zolang in de browser bewaard.</div>');
+}
+function downloadCsv() {
+  const csv = [HEADER, ...LOG].map(csvRow).join('\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }));
+  a.download = `doomsday_log_${stamp().slice(0, 10)}.csv`;
+  document.body.appendChild(a); a.click(); a.remove();
+}
+const L = id => (S.levels[id] ||= { hist: [], total: 0, correct: 0 });
+const recent = id => L(id).hist.slice(-10);
+const mastered = id => { const r = recent(id); return r.length === 10 && r.filter(h => h.ok).length >= 9; };
+const yearRange = () => S.range === 'narrow' ? [1900, 2099] : [1600, 2399];
+const randYear = () => rnd(...yearRange());
+
+// ---------- Uitleg-stukjes ----------
+const whyYY = p => `<div><b>${String(p.yy).padStart(2, '0')}</b>: 12 past er <b>${p.q}×</b> in (${p.q * 12}), rest <b>${p.r}</b>, en 4 past <b>${p.f}×</b> in die rest.</div>
+  <div>${p.q} + ${p.r} + ${p.f} = ${p.total} → mod 7 = <b>${p.off}</b></div>`;
+const whyCentury = p => `<div>Eeuw ${p.c}00 → anker ${dayLabel(p.anchor)}</div>`;
+const whyYear = (y, p) => whyCentury(p) + whyYY(p) +
+  `<div>${p.anchor} + ${p.off} = ${p.anchor + p.off} → doomsday ${y} = ${dayLabel(p.dd)}</div>`;
+const MNEMO = [
+  '3 januari (in een schrikkeljaar de 4e): "3 van de 4 jaren de 3e"',
+  'de laatste dag van februari (28, of 29 in een schrikkeljaar)',
+  '14 maart: pi-dag (3,14) — of "0 maart" = laatste dag van februari',
+  '4/4', '9/5: "9-tot-5 baan"', '6/6', '11/7: "…bij de 7-Eleven"', '8/8',
+  '5/9: "9-tot-5 baan"', '10/10', '7/11: "…bij de 7-Eleven"', '12/12'
+];
+const TABLE_EEUW = `<table class="t"><tr><th>1600</th><th>1700</th><th>1800</th><th>1900</th></tr>
+  <tr><th>2000</th><th>2100</th><th>2200</th><th>2300</th></tr>
+  <tr><td><b>2</b> di</td><td><b>0</b> zo</td><td><b>5</b> vr</td><td><b>3</b> wo</td></tr></table>`;
+const TABLE_MAAND = `<div class="scroll"><table class="t"><tr>${['jan','feb','mrt','apr','mei','jun','jul','aug','sep','okt','nov','dec'].map(m => `<th>${m}</th>`).join('')}</tr>
+  <tr><td>3 / <i>4</i></td><td>28 / <i>29</i></td><td>14</td><td>4</td><td>9</td><td>6</td><td>11</td><td>8</td><td>5</td><td>10</td><td>7</td><td>12</td></tr></table></div>`;
+
+// ---------- De onderdelen ----------
+const LEVELS = [
+  { id: 'weekdag', group: 'Basis', title: 'Weekdagnummers', desc: 'Zondag = 0 tot en met zaterdag = 6, in beide richtingen.',
+    uitleg: `<p>Alles in het algoritme rekent met cijfers in plaats van dagnamen:</p>
+      <table class="t"><tr>${DS.map(d => `<th>${d}</th>`).join('')}</tr><tr>${DS.map((d, i) => `<td><b>${i}</b></td>`).join('')}</tr></table>
+      <p class="muted">Ezelsbruggetje: zondag is "nul-dag", en woensdag (3) zit precies in het midden.</p>`,
+    gen() {
+      const i = rnd(0, 6);
+      return Math.random() < 0.5
+        ? { key: 'n' + i, ask: 'Welk nummer hoort bij', big: cap(DAYS[i]), answer: i, choices: C_07, show: String(i), why: `<div>${cap(DAYS[i])} = <b>${i}</b></div>` }
+        : { key: 'd' + i, ask: 'Welke dag hoort bij', big: String(i), answer: i, choices: C_NAMES, show: DAYS[i], why: `<div><b>${i}</b> = ${DAYS[i]}</div>` };
+    } },
+
+  { id: 'mod7', group: 'Basis', title: 'Rekenen modulo 7', desc: 'Zevenvouden wegstrepen en dagen optellen.',
+    uitleg: `<p>Een week heeft 7 dagen, dus elk veelvoud van 7 mag je weggooien: <b>23 mod 7</b> = 23 − 21 = <b>2</b>.</p>
+      <p>Dagen optellen werkt hetzelfde: woensdag (3) + 5 = 8 → 8 − 7 = 1 = maandag.</p>
+      <p class="muted">Ken de zevenvouden: 7, 14, 21, 28, 35, 42.</p>`,
+    gen() {
+      if (Math.random() < 0.5) {
+        const n = rnd(7, 41);
+        return { key: 'm' + n, ask: 'Wat is', big: `${n} mod 7`, answer: n % 7, choices: C_07, show: String(n % 7),
+          why: `<div>${n} − ${n - n % 7} = <b>${n % 7}</b></div>` };
+      }
+      const d = rnd(0, 6), n = rnd(1, 6), a = (d + n) % 7;
+      return { key: 'p' + d + n, ask: 'Welke dag is', big: `${cap(DAYS[d])} + ${n}`, answer: a, choices: C_WEEK, show: `${DAYS[a]} (${a})`,
+        why: `<div>${DAYS[d]} = ${d}; ${d} + ${n} = ${d + n}${d + n >= 7 ? ` → − 7 = ${a}` : ''} = ${dayLabel(a)}</div>` };
+    } },
+
+  { id: 'eeuw', group: 'Het jaar', title: 'Eeuw-ankers', desc: 'Elke eeuw heeft een vaste startdag: 2, 0, 5, 3.',
+    uitleg: `<p>Elke eeuw begint met een vast anker. Het patroon herhaalt zich elke 400 jaar:</p>${TABLE_EEUW}
+      <p class="muted">Onthoud het rijtje <b>2 – 0 – 5 – 3</b>, beginnend bij 1600 en 2000. De twee die je het meest gebruikt: 1900 = woensdag (3), 2000 = dinsdag (2).</p>`,
+    gen() {
+      const [lo, hi] = yearRange(), c = rnd(lo / 100, Math.floor(hi / 100)), a = centuryAnchor(c);
+      return { key: 'c' + c, ask: 'Wat is het anker van de eeuw', big: `${c}00`, answer: a, choices: C_WEEK, show: `${DAYS[a]} (${a})`,
+        why: `<div>Rijtje 2 – 0 – 5 – 3 vanaf ${c - mod(c, 4)}00 → ${c}00 = ${dayLabel(a)}</div>` };
+    } },
+
+  { id: 'twaalf', group: 'Het jaar', title: 'Delen door 12', desc: 'Hoe vaak past 12 erin, en wat blijft er over?',
+    uitleg: `<p>Van de laatste twee cijfers van het jaar wil je weten hoe vaak <b>12</b> erin past, en wat de <b>rest</b> is.</p>
+      <table class="t"><tr><th>×</th>${[1,2,3,4,5,6,7,8].map(i => `<th>${i}</th>`).join('')}</tr><tr><th>12</th>${[1,2,3,4,5,6,7,8].map(i => `<td>${i * 12}</td>`).join('')}</tr></table>
+      <p>Voorbeeld: 81 → 12 past er <b>6×</b> in (72), rest <b>9</b>.</p>`,
+    gen() {
+      const nums = [...Array(100).keys()];
+      const n = wpick(nums, nums.map(x => (Math.min(x % 12, 12 - x % 12) + 1) * (x > 50 ? 1.5 : 1)));
+      const q = Math.floor(n / 12), r = n % 12, why = `<div>${q} × 12 = ${q * 12}, en ${n} − ${q * 12} = ${r} → <b>${q}×</b>, rest <b>${r}</b></div>`;
+      return Math.random() < 0.5
+        ? { key: 'q' + n, ask: 'Hoe vaak past 12 in', big: String(n), answer: q, choices: C_08, show: q + '×', why }
+        : { key: 'r' + n, ask: 'Wat is de rest van', big: `${n} ÷ 12`, answer: r, show: String(r), why };
+    } },
+
+  { id: 'jaardeel', group: 'Het jaar', title: 'Jaardeel', combo: 'combinatie', desc: 'Laatste twee cijfers → getal 0–6 (twaalven + rest + vieren).',
+    uitleg: `<p>Neem de laatste twee cijfers van het jaar en tel drie dingen op:</p>
+      <ul><li>hoe vaak <b>12</b> erin past</li><li>de <b>rest</b></li><li>hoe vaak <b>4</b> in die rest past</li></ul>
+      <p>Daarna mod 7. Voorbeeld <b>'68</b>: 5 (5×12 = 60) + 8 (rest) + 2 (8 ÷ 4) = 15 → 15 − 14 = <b>1</b>.</p>`,
+    gen() {
+      const p = yyParts(rnd(0, 99));
+      return { key: 'y' + p.yy, ask: 'Wat is het jaardeel (0–6) van', big: `'${String(p.yy).padStart(2, '0')}`, answer: p.off, choices: C_07, show: String(p.off), why: whyYY(p) };
+    } },
+
+  { id: 'jaar', group: 'Het jaar', title: 'Doomsday van een jaar', combo: 'combinatie', desc: 'Eeuw-anker + jaardeel → de doomsday van het hele jaar.',
+    uitleg: `<p>De doomsday van een jaar = <b>eeuw-anker + jaardeel</b>, mod 7.</p>${TABLE_EEUW}
+      <p>Voorbeeld <b>1867</b>: anker 1800 = 5. Jaardeel '67: 5 + 7 + 1 = 13 → 6. Samen 5 + 6 = 11 → <b>4 = donderdag</b>.</p>`,
+    gen() {
+      const y = randYear(), p = yearParts(y);
+      return { key: 'j' + y, ask: 'Wat is de doomsday van', big: String(y), answer: p.dd, choices: C_WEEK, show: `${DAYS[p.dd]} (${p.dd})`, why: whyYear(y, p) };
+    } },
+
+  { id: 'maandnr', group: 'De maand', title: 'Maandnummers', desc: 'Juli = 7, september = 9… snel en zonder tellen.',
+    uitleg: `<p>De ezelsbruggetjes voor de maanden werken met het maandnummer, dus dat moet er direct uitkomen.</p>
+      <table class="t"><tr>${MONTHS.slice(0, 6).map((m, i) => `<td>${i + 1} ${m}</td>`).join('')}</tr><tr>${MONTHS.slice(6).map((m, i) => `<td>${i + 7} ${m}</td>`).join('')}</tr></table>`,
+    gen() {
+      const m = rnd(1, 12);
+      return { key: 'mn' + m, ask: 'De hoeveelste maand is', big: cap(MONTHS[m - 1]), answer: m, show: String(m), why: `<div>${cap(MONTHS[m - 1])} = maand <b>${m}</b></div>` };
+    } },
+
+  { id: 'schrikkel', group: 'De maand', title: 'Schrikkeljaar?', desc: 'Nodig voor januari en februari.',
+    uitleg: `<p>Een jaar is een schrikkeljaar als het <b>deelbaar is door 4</b>.</p>
+      <p>Uitzondering: eeuwjaren (1700, 1800, 1900, 2100…) zijn het <b>niet</b>, behalve als ze deelbaar zijn door 400 (1600, 2000).</p>
+      <p class="muted">Trucje: kijk alleen naar de laatste twee cijfers. '36, '52, '96 → deelbaar door 4.</p>`,
+    gen() {
+      const [lo, hi] = yearRange(), t = Math.random();
+      let y = randYear();
+      if (t < 0.2) y = rnd(lo / 100, Math.floor(hi / 100)) * 100;
+      else if (t < 0.55) y -= y % 4;
+      const leap = isLeap(y), yy = y % 100;
+      const why = yy === 0
+        ? `<div>Eeuwjaar: alleen een schrikkeljaar als het deelbaar is door 400 → ${y} is ${leap ? 'dat <b>wel</b>' : 'dat <b>niet</b>'}.</div>`
+        : `<div>'${String(yy).padStart(2, '0')} is ${leap ? '' : '<b>niet</b> '}deelbaar door 4${leap ? ` (${yy} = 4 × ${yy / 4})` : ''} → ${leap ? '<b>wel</b>' : '<b>geen</b>'} schrikkeljaar.</div>`;
+      return { key: 's' + y, ask: 'Is dit een schrikkeljaar?', big: String(y), answer: leap ? 1 : 0, choices: C_YN, show: leap ? 'ja' : 'nee', why };
+    } },
+
+  { id: 'maandanker', group: 'De maand', title: 'Maand-doomsdays', desc: 'Welke datum in elke maand valt altijd op de doomsday?',
+    uitleg: `<p>In elke maand is er een makkelijk te onthouden datum die op de doomsday van dat jaar valt:</p>${TABLE_MAAND}
+      <ul><li><b>Even maanden</b>: 4/4, 6/6, 8/8, 10/10, 12/12</li>
+      <li><b>"Ik werk van 9 tot 5 bij de 7-Eleven"</b>: 9/5, 5/9, 11/7 en 7/11</li>
+      <li><b>Maart</b>: de 14e (pi-dag)</li><li><b>Februari</b>: de laatste dag</li>
+      <li><b>Januari</b>: de 3e, in een schrikkeljaar <i>de 4e</i></li></ul>
+      <p class="muted">Elke datum die een veelvoud van 7 verder ligt telt ook als goed (bijv. 18 juli in plaats van 11 juli).</p>`,
+    gen() {
+      const m = wpick([1,2,3,4,5,6,7,8,9,10,11,12], [1.5,1.5,1,1,1,1,1,1,1,1,1,1]);
+      const leap = m <= 2 ? Math.random() < 0.5 : false, a = monthAnchor(m, leap);
+      return { key: 'ma' + m + leap, ask: 'Welke datum is een doomsday in', big: cap(MONTHS[m - 1]),
+        small: m <= 2 ? (leap ? 'schrikkeljaar' : 'geen schrikkeljaar') : '', answer: a, show: String(a),
+        check: v => v >= 1 && v <= daysIn(m, leap) && mod(v - a, 7) === 0,
+        why: `<div>${cap(MONTHS[m - 1])}: <b>${a}</b> — ${MNEMO[m - 1]}</div>` };
+    } },
+
+  { id: 'offset', group: 'De maand', title: 'Afstand tot de doomsday', combo: 'combinatie', desc: 'Datum → hoeveel dagen na de doomsday (0–6).',
+    uitleg: `<p>Zoek de doomsday-datum van de maand, trek die af van de dag, en neem mod 7.</p>
+      <p>Voorbeeld <b>25 april</b>: doomsday is 4/4, 25 − 4 = 21 → <b>0</b> (zelfde weekdag als de doomsday).</p>
+      <p>Voorbeeld <b>4 augustus</b>: doomsday is 8/8, 4 − 8 = −4 → +7 = <b>3</b>.</p>
+      <p class="muted">Tip: spring eerst met stappen van 7 naar een doomsday dichtbij (8 → 15 → 22 → 29) en tel dan het laatste stukje.</p>${TABLE_MAAND}`,
+    gen() {
+      const m = wpick([1,2,3,4,5,6,7,8,9,10,11,12], [1.5,1.5,1,1,1,1,1,1,1,1,1,1]);
+      const leap = Math.random() < 0.5, a = monthAnchor(m, leap), n = daysIn(m, leap);
+      const ds = [...Array(n).keys()].map(i => i + 1);
+      const d = wpick(ds, ds.map(x => 1 + Math.abs(x - a) ** 1.2 / 5)), off = mod(d - a, 7);
+      return { key: 'o' + m + d + leap, ask: 'Hoeveel dagen na de doomsday valt', big: `${d} ${MONTHS[m - 1]}`,
+        small: leap ? 'schrikkeljaar' : 'geen schrikkeljaar', answer: off, choices: C_07, show: String(off),
+        why: `<div>Doomsday in ${MONTHS[m - 1]}: de <b>${a}e</b></div><div>${d} − ${a} = ${d - a} → mod 7 = <b>${off}</b>${off ? ` (of ${off - 7})` : ''}</div>` };
+    } },
+
+  { id: 'datum', group: 'Alles samen', title: 'Volledige datum', combo: 'eindbaas', desc: 'Dag, maand en jaar → de weekdag. Het hele algoritme.',
+    uitleg: `<p>Alles achter elkaar:</p>
+      <ul><li><b>Jaar</b>: eeuw-anker + jaardeel → doomsday van het jaar</li>
+      <li><b>Maand</b>: zoek de doomsday-datum (let op schrikkeljaar bij jan/feb)</li>
+      <li><b>Dag</b>: tel het verschil erbij op, mod 7</li></ul>
+      <p>Voorbeeld <b>15 maart 1680</b>: anker 1600 = 2; '80 → 6 + 8 + 2 = 16 → 2; doomsday = 4 (donderdag). 14 maart is doomsday, dus de 15e is één later: <b>vrijdag (5)</b>.</p>`,
+    gen() {
+      const y = randYear(), m = rnd(1, 12), leap = isLeap(y), d = rnd(1, daysIn(m, leap));
+      const p = yearParts(y), a = monthAnchor(m, leap), off = mod(d - a, 7), w = weekdayOf(y, m, d);
+      return { key: 'f' + y + m + d, ask: 'Op welke weekdag valt', big: `${d} ${MONTHS[m - 1]} ${y}`, answer: w, choices: C_WEEK, show: `${DAYS[w]} (${w})`,
+        why: whyYear(y, p) + `<div>Doomsday in ${MONTHS[m - 1]}${m <= 2 ? ` (${leap ? 'schrikkeljaar' : 'geen schrikkeljaar'})` : ''}: de <b>${a}e</b>; ${d} − ${a} = ${d - a} → <b>${off}</b></div>
+          <div>${p.dd} + ${off} = ${p.dd + off} → ${dayLabel(w)}</div>` };
+    } },
+
+  { id: 'mix', group: 'Alles samen', title: 'Mix', combo: 'door elkaar', desc: 'Vragen uit alle onderdelen door elkaar.',
+    uitleg: `<p>Willekeurige vragen uit alle onderdelen, om alles tegelijk scherp te houden.</p>`,
+    gen() {
+      const lvl = pick(LEVELS.filter(l => l.id !== 'mix')), q = lvl.gen();
+      q.tag = lvl.title; return q;
+    } },
+];
+const byId = id => LEVELS.find(l => l.id === id);
+const nextUp = () => LEVELS.find(l => l.id !== 'mix' && !mastered(l.id));
+
+// ---------- Schermen ----------
+const app = document.getElementById('app');
+let cur = null; // huidige sessie
+
+const dots = id => { const r = recent(id);
+  return `<span class="dots">${[...Array(10).keys()].map(i => `<i class="${r[i] ? (r[i].ok ? 'ok' : 'no') : ''}"></i>`).join('')}</span>`; };
+const avgTime = id => { const r = recent(id); return r.length ? (r.reduce((a, h) => a + h.t, 0) / r.length).toFixed(1) + ' s' : '–'; };
+
+function home() {
+  cur = null;
+  const nx = nextUp();
+  const groups = [...new Set(LEVELS.map(l => l.group))];
+  app.innerHTML = `
+    <div class="top">
+      <div><h1>Doomsday trainer</h1><p class="muted">Leer elk stukje van het doomsday-algoritme los, en daarna steeds een stap erbij.</p></div>
+      <div><div class="muted" style="font-size:12px;margin-bottom:4px">Jaren</div>
+        <div class="seg"><button data-range="narrow" class="${S.range === 'narrow' ? 'on' : ''}">1900–2099</button><button data-range="wide" class="${S.range !== 'narrow' ? 'on' : ''}">1600–2399</button></div></div>
+    </div>
+    <div class="next">${nx
+      ? `<div><div class="muted" style="font-size:13px">${L(nx.id).total ? 'Ga verder met' : 'Begin met'}</div><b>${LEVELS.indexOf(nx) + 1}. ${nx.title}</b></div><button class="btn primary" data-go="${nx.id}">Oefenen →</button>`
+      : `<div><b>Alles gehaald!</b> <span class="muted">Hou het bij met de mix of de volledige datum.</span></div><button class="btn primary" data-go="mix">Mix →</button>`}</div>
+    ${groups.map(g => `<h2>${g}</h2><div class="grid">${LEVELS.filter(l => l.group === g).map(l => {
+      const i = LEVELS.indexOf(l) + 1, st = L(l.id), m = mastered(l.id);
+      return `<button class="card" data-go="${l.id}">
+        <div class="row"><span class="num">${i}${l.combo ? ` · <span class="combo">${l.combo}</span>` : ''}</span>
+          <span class="badge ${m ? 'done' : st.total ? 'busy' : ''}">${m ? '✓ gehaald' : st.total ? 'bezig' : 'nieuw'}</span></div>
+        <div class="title">${l.title}</div><div class="desc">${l.desc}</div>
+        <div class="row">${dots(l.id)}<span class="num">${st.total ? `${avgTime(l.id)} · ${st.correct}/${st.total}` : ''}</span></div>
+      </button>`; }).join('')}</div>`).join('')}
+    <footer><span>Een onderdeel is gehaald bij 9 van de laatste 10 goed. ${GH
+        ? `Log en voortgang staan in <b>${GH.repo}</b> · <span id="sync">${syncText()}</span>`
+        : SERVER
+        ? (diskOk ? 'Elke poging wordt direct naar <b>doomsday_log.csv</b> geschreven.' : '<b style="color:var(--bad)">Schrijven naar doomsday_log.csv lukt niet — draait start.command nog?</b>')
+        : '<b style="color:var(--bad)">Niet gekoppeld: alles staat alleen in deze browser. Koppel GitHub hieronder.</b>'}</span>
+      <span>${LOG.length && !GH ? `<button class="btn link" id="csv">Browser-log downloaden (${LOG.length} pogingen)</button> · ` : ''}<button class="btn link" id="reset">Voortgang wissen</button></span></footer>
+    <details class="uitleg" style="margin-top:14px"><summary>Opslag op GitHub ${GH ? '— gekoppeld' : '— niet gekoppeld'}</summary><div class="body">
+      ${GH ? `<p>Dit apparaat schrijft naar <b>${GH.repo}</b>.</p><button class="btn" id="ghoff">Ontkoppelen op dit apparaat</button>`
+        : `<p class="muted">Eén keer per apparaat invullen. Het token blijft alleen in deze browser staan.</p>
+        <p><input id="ghrepo" placeholder="gebruiker/repo" value="${DEFAULT_REPO}" style="font:inherit;padding:8px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--ink);width:100%;max-width:320px"></p>
+        <p><input id="ghtoken" type="password" placeholder="token (github_pat_…)" autocomplete="off" style="font:inherit;padding:8px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--ink);width:100%;max-width:320px"></p>
+        <button class="btn primary" id="ghsave">Koppelen</button> <span id="ghmsg" style="color:var(--bad)"></span>`}</div></details>`;
+  if (GH) flush();
+}
+
+function start(id) {
+  cur = { lvl: byId(id), q: null, t0: 0, state: 'ask', streak: 0, n: 0, retry: [], lastKey: null, wasMastered: mastered(id), banner: false, timer: null };
+  const l = cur.lvl;
+  app.innerHTML = `
+    <div class="bar"><button class="btn" id="back">← Overzicht</button>
+      <div class="stats"><span>Reeks <b id="streak">0</b></span><span id="dots"></span><span>Gem. <b id="avg">–</b></span><span id="sync" style="font-size:12px"></span></div></div>
+    <div id="banner"></div>
+    <details class="uitleg" ${L(id).total ? '' : 'open'}><summary>${LEVELS.indexOf(l) + 1}. ${l.title} — uitleg</summary><div class="body">${l.uitleg}</div></details>
+    <div class="quiz" id="quiz"></div>
+    <div class="hint">Toetsenbord: typ het antwoord · <kbd>Enter</kbd> voor de volgende vraag · <kbd>Esc</kbd> terug naar het overzicht</div>`;
+  ask();
+}
+
+function ask() {
+  const c = cur; clearTimeout(c.timer);
+  c.n++;
+  const due = c.retry.findIndex(r => r.due <= c.n);
+  if (due >= 0) c.q = c.retry.splice(due, 1)[0].q;
+  else { let q, tries = 0; do { q = c.lvl.gen(); } while (q.key === c.lastKey && ++tries < 6); c.q = q; }
+  c.lastKey = c.q.key; c.state = 'ask';
+  const q = c.q;
+  document.getElementById('quiz').innerHTML = `
+    <div class="tag">${q.tag || ''}</div><div class="ask">${q.ask}</div><div class="big">${q.big}</div><div class="small">${q.small || ''}</div>
+    ${q.choices
+      ? `<div class="choices">${q.choices.map(ch => `<button data-v="${ch.v}">${ch.label}</button>`).join('')}</div>`
+      : `<form class="num" id="numform"><input id="num" inputmode="numeric" autocomplete="off" maxlength="3"><button class="btn primary">OK</button></form>`}
+    <div class="fb" id="fb"></div>`;
+  const inp = document.getElementById('num'); if (inp) inp.focus();
+  refreshStats();
+  c.t0 = performance.now();
+}
+
+function answer(v) {
+  const c = cur, q = c.q; if (!c || c.state !== 'ask') return;
+  const t = (performance.now() - c.t0) / 1000, ok = q.check ? q.check(v) : v === q.answer;
+  c.state = 'fb';
+  const st = L(c.lvl.id);
+  st.total++; if (ok) st.correct++;
+  st.hist.push({ ok, t: Math.round(t * 10) / 10 }); if (st.hist.length > 50) st.hist.shift();
+  save();
+  logAttempt([stamp(), c.lvl.title, q.tag || c.lvl.title, plain(`${q.ask} ${q.big}${q.small ? ` (${q.small})` : ''}`),
+    q.choices ? plain((q.choices.find(ch => ch.v === v) || {}).label || v).replace(/ [JN]$/, '') : v, plain(q.show), ok ? 'Ja' : 'Nee', t.toFixed(2)]);
+  c.streak = ok ? c.streak + 1 : 0;
+  if (!ok) c.retry.push({ q, due: c.n + rnd(3, 5) });
+  document.querySelectorAll('.choices button').forEach(b => {
+    b.disabled = true;
+    if (+b.dataset.v === q.answer) b.classList.add('right'); else if (+b.dataset.v === v) b.classList.add('wrong');
+  });
+  const inp = document.getElementById('num'); if (inp) inp.disabled = true;
+  const fb = document.getElementById('fb');
+  fb.className = 'fb ' + (ok ? 'ok' : 'no');
+  fb.innerHTML = `<div class="verdict">${ok ? '✓ Goed' : `✗ Fout — het is ${q.show}`} <span class="muted" style="font-weight:400;font-size:14px">· ${t.toFixed(1)} s</span></div>
+    <div class="why">${q.why}</div>${ok ? '' : '<button class="btn primary" id="nextq">Volgende (Enter)</button>'}`;
+  refreshStats();
+  if (!c.wasMastered && mastered(c.lvl.id)) { c.wasMastered = true; c.banner = true; showBanner(); }
+  if (ok) c.timer = setTimeout(() => { if (cur === c && c.state === 'fb') ask(); }, 500);
+}
+
+function showBanner() {
+  const i = LEVELS.indexOf(cur.lvl), nx = LEVELS[i + 1];
+  document.getElementById('banner').innerHTML = `<div class="banner"><span>🎉 ${cur.lvl.title} gehaald!</span>
+    ${nx ? `<button class="btn primary" data-go="${nx.id}">Volgende: ${nx.title} →</button>` : ''}</div>`;
+}
+function refreshStats() {
+  document.getElementById('streak').textContent = cur.streak;
+  document.getElementById('dots').innerHTML = dots(cur.lvl.id);
+  document.getElementById('avg').textContent = avgTime(cur.lvl.id);
+}
+
+// ---------- Events ----------
+document.addEventListener('click', e => {
+  const t = e.target.closest('button'); if (!t) return;
+  if (t.dataset.go) return start(t.dataset.go);
+  if (t.dataset.range) { S.range = t.dataset.range; save(); return home(); }
+  if (t.id === 'back') return home();
+  if (t.id === 'nextq') return ask();
+  if (t.id === 'csv') return downloadCsv();
+  if (t.id === 'ghoff') { if (confirm('Ontkoppelen? Het token wordt van dit apparaat verwijderd.')) { GH = null; localStorage.removeItem(GHKEY); home(); } return; }
+  if (t.id === 'ghsave') {
+    const repo = document.getElementById('ghrepo').value.trim(), token = document.getElementById('ghtoken').value.trim(), msg = document.getElementById('ghmsg');
+    if (!/^[\w.-]+\/[\w.-]+$/.test(repo) || !token) { msg.textContent = 'Vul repo (gebruiker/repo) en token in.'; return; }
+    msg.textContent = 'Testen…';
+    ghConnect(repo, token).then(boot).catch(err => { msg.textContent = 'Mislukt: ' + err.message; });
+    return;
+  }
+  if (t.id === 'reset') { if (confirm('Alle voortgang wissen?')) { S.levels = {}; save(); home(); } return; }
+  if (t.dataset.v !== undefined && cur) answer(+t.dataset.v);
+});
+document.addEventListener('submit', e => {
+  e.preventDefault();
+  if (!cur) return;
+  if (cur.state === 'fb') return ask();
+  const raw = document.getElementById('num').value.trim();
+  if (/^\d+$/.test(raw)) answer(+raw);
+});
+document.addEventListener('keydown', e => {
+  if (!cur || e.metaKey || e.ctrlKey || e.altKey) return;
+  if (e.key === 'Escape') return home();
+  if (cur.state === 'fb') { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); ask(); } return; }
+  if (cur.q.choices) {
+    const ch = cur.q.choices.find(c => c.key === e.key.toLowerCase());
+    if (ch) { e.preventDefault(); answer(ch.v); }
+  }
+});
+
+async function boot() {
+  if (GH) {
+    app.innerHTML = '<p class="muted">Voortgang laden…</p>';
+    try {
+      const f = await ghRead('voortgang.json');
+      if (f.text) S = Object.assign(S, JSON.parse(f.text));        // GitHub is leidend
+      else if (Object.keys(S.levels).length) stateDirty = true;    // eerste keer: lokale voortgang uploaden
+      syncErr = null;
+    } catch (e) { syncErr = e.message || 'geen verbinding'; }
+    home();
+  } else if (SERVER) {
+    fetch('/state').then(r => r.json()).then(d => {
+      if (d && d.levels) S = Object.assign(S, d);   // schijf is leidend
+      else if (Object.keys(S.levels).length) save(); // eerste keer: bestaande voortgang naar schijf
+    }).catch(() => { diskOk = false; }).finally(home);
+  } else home();
+}
+document.addEventListener('visibilitychange', () => { if (document.hidden && GH) flush(); });
+boot();
+</script>
+</body>
+</html>

@@ -1,0 +1,4 @@
+doomsday_log*.csv
+voortgang.json
+*.tmp
+.DS_Store
