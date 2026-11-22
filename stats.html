@@ -1,0 +1,327 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Doomsday statistieken</title>
+<style>
+  :root {
+    --bg: #f6f4ef; --card: #ffffff; --ink: #1d1c1a; --muted: #6d6a63; --line: #e2ded4; --grid: #eeebe4;
+    --accent: #3f4bd1; --accent-ink: #ffffff; --accent-soft: #e6e8fb;
+    --good: #1f8a4c; --good-soft: #def3e5; --bad: #c0392b; --bad-soft: #fbe3df;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #15161a; --card: #1f2127; --ink: #eceae4; --muted: #9a978f; --line: #30333c; --grid: #282a31;
+      --accent: #8b95ff; --accent-ink: #12131a; --accent-soft: #2a2e52;
+      --good: #5fd08c; --good-soft: #1d3a29; --bad: #ff8577; --bad-soft: #45231f;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+    font: 16px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 860px; margin: 0 auto; padding: 28px 16px 60px; }
+  h1 { font-size: 28px; margin: 0 0 4px; letter-spacing: -0.02em; }
+  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 30px 0 10px; }
+  p { margin: 0 0 10px; }
+  a { color: var(--accent); }
+  .muted { color: var(--muted); }
+  button, select { font: inherit; color: inherit; cursor: pointer; }
+  .btn { border: 1px solid var(--line); background: var(--card); border-radius: 10px; padding: 9px 16px; text-decoration: none; color: var(--ink); display: inline-block; }
+  .btn:hover { border-color: var(--accent); }
+  .top { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap; margin-bottom: 6px; }
+  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--card); }
+  .seg button { border: 0; background: none; padding: 7px 12px; font-size: 14px; }
+  .seg button.on { background: var(--accent); color: var(--accent-ink); }
+  .panel { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px; }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; margin-top: 20px; }
+  .tile { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; }
+  .tile .k { font-size: 13px; color: var(--muted); }
+  .tile .v { font-size: 30px; font-weight: 700; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; line-height: 1.2; }
+  .tile .s { font-size: 13px; color: var(--muted); }
+  .head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 8px; }
+  .legend { display: flex; gap: 14px; font-size: 13px; color: var(--muted); }
+  .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+  .chart { width: 100%; position: relative; }
+  .chart svg { display: block; overflow: visible; }
+  .chart text { font-size: 11px; fill: var(--muted); font-variant-numeric: tabular-nums; }
+  table.t { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; font-size: 14px; }
+  table.t th { text-align: right; font-weight: 500; color: var(--muted); font-size: 12px; padding: 6px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  table.t td { text-align: right; padding: 8px; border-bottom: 1px solid var(--grid); white-space: nowrap; }
+  table.t th:first-child, table.t td:first-child { text-align: left; padding-left: 0; white-space: normal; }
+  table.t tr:last-child td { border-bottom: 0; }
+  .scroll { overflow-x: auto; }
+  .pct { display: inline-flex; align-items: center; gap: 6px; }
+  .pct .b { width: 44px; height: 6px; border-radius: 3px; background: var(--grid); overflow: hidden; }
+  .pct .b span { display: block; height: 100%; background: var(--good); border-radius: 3px; }
+  .up { color: var(--good); } .down { color: var(--bad); }
+  .wrong { color: var(--bad); }
+  select { border: 1px solid var(--line); background: var(--card); border-radius: 10px; padding: 7px 10px; font-size: 14px; }
+  #tip { position: fixed; pointer-events: none; background: var(--ink); color: var(--bg); font-size: 13px; padding: 6px 9px;
+    border-radius: 8px; white-space: nowrap; z-index: 9; display: none; font-variant-numeric: tabular-nums; line-height: 1.35; }
+  footer { margin-top: 34px; font-size: 13px; color: var(--muted); }
+</style>
+</head>
+<body>
+<main id="app"><p class="muted">Statistieken laden…</p></main>
+<div id="tip"></div>
+
+<script>
+// Volgorde van de onderdelen zoals in de trainer
+const ORDER = ['Weekdagnummers', 'Rekenen modulo 7', 'Eeuw-ankers', 'Delen door 12', 'Jaardeel', 'Doomsday van een jaar',
+  'Maandnummers', 'Schrikkeljaar?', 'Maand-doomsdays', 'Afstand tot de doomsday', 'Volledige datum'];
+const GHKEY = 'doomsday-trainer-gh', LOGKEY = 'doomsday-trainer-log-v1';
+let GH = null, PENDING = [];
+try { GH = JSON.parse(localStorage.getItem(GHKEY)); } catch (e) {}
+try { PENDING = JSON.parse(localStorage.getItem(LOGKEY) || '[]'); } catch (e) {}
+
+const app = document.getElementById('app'), tip = document.getElementById('tip');
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const nl = (x, d = 1) => x.toFixed(d).replace('.', ',');
+const pad2 = n => String(n).padStart(2, '0');
+const dkey = d => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+const DOW = ['zo', 'ma', 'di', 'wo', 'do', 'vr', 'za'];
+const MON = ['jan', 'feb', 'mrt', 'apr', 'mei', 'jun', 'jul', 'aug', 'sep', 'okt', 'nov', 'dec'];
+const dayLabel = k => { const d = new Date(k + 'T12:00'); return `${DOW[d.getDay()]} ${d.getDate()} ${MON[d.getMonth()]}`; };
+const median = a => { if (!a.length) return NaN; const s = [...a].sort((x, y) => x - y), m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; };
+const pctOk = a => a.length ? 100 * a.filter(r => r.ok).length / a.length : NaN;
+const sec = x => isNaN(x) ? '–' : nl(x) + ' s';
+
+// ---------- Data ophalen ----------
+function parseCsv(text) {
+  const rows = []; let row = [], cell = '', q = false;
+  text = text.replace(/^﻿/, '');
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (q) { if (ch === '"') { if (text[i + 1] === '"') { cell += '"'; i++; } else q = false; } else cell += ch; }
+    else if (ch === '"') q = true;
+    else if (ch === ',') { row.push(cell); cell = ''; }
+    else if (ch === '\n' || ch === '\r') { if (ch === '\r' && text[i + 1] === '\n') i++; row.push(cell); rows.push(row); row = []; cell = ''; }
+    else cell += ch;
+  }
+  if (cell || row.length) { row.push(cell); rows.push(row); }
+  return rows.filter(r => r.length >= 8 && r[0] !== 'Timestamp');
+}
+const toRec = r => ({ ts: r[0], day: r[0].slice(0, 10), onderdeel: r[1], bron: r[2], vraag: r[3], antwoord: r[4], juist: r[5],
+  ok: r[6] === 'Ja', t: parseFloat(r[7]) || 0, date: new Date(r[0].replace(' ', 'T')) });
+
+async function gh(path, raw) {
+  const r = await fetch('https://api.github.com/repos/' + GH.repo + '/contents/' + path, { cache: 'no-store',
+    headers: { Authorization: 'Bearer ' + GH.token, Accept: raw ? 'application/vnd.github.raw+json' : 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28' } });
+  if (!r.ok) throw new Error(r.status === 401 ? 'token ongeldig of verlopen' : r.status === 404 || r.status === 403 ? 'geen toegang tot de repo' : 'GitHub-fout ' + r.status);
+  return raw ? r.text() : r.json();
+}
+async function load() {
+  const list = await gh('', false);
+  const files = list.map(f => f.name).filter(n => /^doomsday_log_\d{4}-\d{2}\.csv$/.test(n)).sort();
+  const texts = await Promise.all(files.map(f => gh(f, true)));
+  const rows = texts.flatMap(parseCsv).concat(PENDING.filter(r => Array.isArray(r) && r.length >= 8).map(r => r.map(String)));
+  return rows.map(toRec).filter(r => !isNaN(r.date)).sort((a, b) => a.date - b.date);
+}
+
+// ---------- Staat ----------
+let ALL = [], RANGE = 'all', SKILL = null;
+const RANGES = [['today', 'Vandaag'], ['7', '7 dagen'], ['30', '30 dagen'], ['all', 'Alles']];
+function inRange() {
+  if (RANGE === 'all') return ALL;
+  const now = new Date(), from = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  if (RANGE !== 'today') from.setDate(from.getDate() - (+RANGE - 1));
+  return ALL.filter(r => r.date >= from);
+}
+const skills = rows => { const s = new Set(rows.map(r => r.bron)); return [...ORDER.filter(o => s.has(o)), ...[...s].filter(o => !ORDER.includes(o))]; };
+
+// ---------- Tooltip ----------
+document.addEventListener('mousemove', e => {
+  const el = e.target.closest('[data-tip]');
+  if (!el) { tip.style.display = 'none'; return; }
+  tip.innerHTML = el.dataset.tip; tip.style.display = 'block';
+  const w = tip.offsetWidth, x = Math.min(e.clientX + 14, innerWidth - w - 8);
+  tip.style.left = Math.max(8, x) + 'px'; tip.style.top = (e.clientY - tip.offsetHeight - 12) + 'px';
+});
+
+// ---------- Grafieken ----------
+const niceMax = v => { if (v <= 0) return 1; const p = 10 ** Math.floor(Math.log10(v)), n = v / p; return (n <= 1 ? 1 : n <= 2 ? 2 : n <= 5 ? 5 : 10) * p; };
+// Twee rechthoeken met een ronde bovenkant (4px), vlak op de basislijn
+const barPath = (x, y, w, h, r = 4) => { r = Math.min(r, w / 2, h); return h <= 0 ? '' :
+  `M${x},${y + h}V${y + r}Q${x},${y} ${x + r},${y}H${x + w - r}Q${x + w},${y} ${x + w},${y + r}V${y + h}Z`; };
+
+function activityChart(rows, el) {
+  const W = el.clientWidth, H = 190, L = 34, B = 22, T = 8;
+  const sameDay = rows.length && rows[0].day === rows[rows.length - 1].day;
+  let buckets;
+  if (sameDay) {   // één dag: per uur
+    const hs = rows.map(r => r.date.getHours()), lo = Math.min(...hs), hi = Math.max(...hs);
+    buckets = []; for (let h = lo; h <= hi; h++) buckets.push({ key: h, label: `${h}:00`, ok: 0, no: 0 });
+    rows.forEach(r => buckets[r.date.getHours() - lo][r.ok ? 'ok' : 'no']++);
+  } else {         // per dag, ook de lege dagen ertussen
+    const first = new Date(rows[0].day + 'T12:00'), last = new Date(rows[rows.length - 1].day + 'T12:00'), idx = {};
+    buckets = [];
+    for (let d = new Date(first); d <= last; d.setDate(d.getDate() + 1)) { const k = dkey(d); idx[k] = buckets.length; buckets.push({ key: k, label: dayLabel(k), ok: 0, no: 0 }); }
+    rows.forEach(r => buckets[idx[r.day]][r.ok ? 'ok' : 'no']++);
+  }
+  const max = niceMax(Math.max(...buckets.map(b => b.ok + b.no))), n = buckets.length;
+  const pw = W - L, step = pw / n, bw = Math.max(3, Math.min(36, step * 0.66)), ph = H - B - T, y = v => T + ph - v / max * ph;
+  const every = Math.ceil(n / Math.max(1, Math.floor(pw / 70)));
+  let s = `<svg width="${W}" height="${H}">`;
+  [0, max / 2, max].forEach(v => { s += `<line x1="${L}" x2="${W}" y1="${y(v)}" y2="${y(v)}" stroke="var(--grid)"/><text x="${L - 8}" y="${y(v) + 4}" text-anchor="end">${v}</text>`; });
+  buckets.forEach((b, i) => {
+    const x = L + i * step + (step - bw) / 2, hOk = b.ok / max * ph, hNo = b.no / max * ph, gap = b.ok && b.no ? 2 : 0;
+    const tipTxt = `<b>${b.label}</b><br>${b.ok + b.no} pogingen · ${b.ok} goed · ${b.no} fout`;
+    if (b.ok) s += `<path d="${b.no ? `M${x},${T + ph}V${T + ph - hOk}H${x + bw}V${T + ph}Z` : barPath(x, T + ph - hOk, bw, hOk)}" fill="var(--good)"/>`;
+    if (b.no) s += `<path d="${barPath(x, T + ph - hOk - gap - hNo, bw, hNo)}" fill="var(--bad)"/>`;
+    s += `<rect x="${L + i * step}" y="${T}" width="${step}" height="${ph}" fill="transparent" data-tip="${esc(tipTxt)}"/>`;
+    if (i % every === 0) s += `<text x="${x + bw / 2}" y="${H - 6}" text-anchor="middle">${sameDay ? b.label : b.label.slice(3)}</text>`;
+  });
+  el.innerHTML = s + `<line x1="${L}" x2="${W}" y1="${T + ph}" y2="${T + ph}" stroke="var(--line)"/></svg>`;
+}
+
+// Tijd per poging + lopende mediaan (laatste 10) voor één onderdeel
+function speedChart(rows, el) {
+  const W = el.clientWidth, H = 210, L = 34, B = 22, T = 8, R = 8;
+  if (rows.length < 2) { el.innerHTML = '<p class="muted">Te weinig pogingen voor een grafiek.</p>'; return; }
+  const ts = rows.map(r => r.t), cap = niceMax(Math.max(median(ts) * 3, [...ts].sort((a, b) => a - b)[Math.floor(ts.length * 0.9)] || 1));
+  const roll = rows.map((r, i) => median(rows.slice(Math.max(0, i - 9), i + 1).map(x => x.t)));
+  const pw = W - L - R, ph = H - B - T, n = rows.length;
+  const x = i => L + (n === 1 ? pw / 2 : i / (n - 1) * pw), y = v => T + ph - Math.min(v, cap) / cap * ph;
+  let s = `<svg width="${W}" height="${H}">`;
+  [0, cap / 2, cap].forEach(v => { s += `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" stroke="var(--grid)"/><text x="${L - 8}" y="${y(v) + 4}" text-anchor="end">${nl(v, v % 1 ? 1 : 0)}s</text>`; });
+  rows.forEach((r, i) => { s += `<circle cx="${x(i)}" cy="${y(r.t)}" r="${r.ok ? 2.5 : 3.5}" fill="${r.ok ? 'var(--muted)' : 'var(--bad)'}" opacity="${r.ok ? .35 : .9}"/>`; });
+  s += `<path d="${roll.map((v, i) => (i ? 'L' : 'M') + x(i).toFixed(1) + ',' + y(v).toFixed(1)).join('')}" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`;
+  const every = Math.ceil(n / Math.max(1, Math.floor(pw / 60)));
+  for (let i = 0; i < n; i += every) s += `<text x="${x(i)}" y="${H - 6}" text-anchor="middle">${i + 1}</text>`;
+  // hover: één strook per poging
+  const sw = pw / Math.max(1, n - 1);
+  rows.forEach((r, i) => {
+    const t = `<b>Poging ${i + 1}</b> · ${r.ts.slice(5, 16)}<br>${esc(r.vraag)}<br>${r.ok ? '✓ goed' : `✗ ${esc(r.antwoord)} (moest ${esc(r.juist)})`} · ${nl(r.t)} s<br>mediaan laatste 10: ${nl(roll[i])} s`;
+    s += `<g data-tip="${esc(t)}"><rect x="${x(i) - sw / 2}" y="${T}" width="${sw}" height="${ph}" fill="transparent"/></g>`;
+  });
+  el.innerHTML = s + `<line x1="${L}" x2="${W - R}" y1="${T + ph}" y2="${T + ph}" stroke="var(--line)"/></svg>`;
+}
+
+function spark(rows) {
+  const W = 80, H = 22;
+  if (rows.length < 3) return '';
+  const roll = rows.map((r, i) => median(rows.slice(Math.max(0, i - 9), i + 1).map(x => x.t)));
+  const lo = Math.min(...roll), hi = Math.max(...roll), n = roll.length;
+  const pts = roll.map((v, i) => `${(i / (n - 1) * (W - 4) + 2).toFixed(1)},${(hi === lo ? H / 2 : 2 + (H - 4) * (1 - (v - lo) / (hi - lo))).toFixed(1)}`);
+  return `<svg width="${W}" height="${H}" style="vertical-align:middle" aria-hidden="true"><polyline points="${pts.join(' ')}" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linejoin="round"/></svg>`;
+}
+
+// ---------- Scherm ----------
+function streakDays() {
+  const days = new Set(ALL.map(r => r.day)), d = new Date();
+  if (!days.has(dkey(d))) d.setDate(d.getDate() - 1);   // vandaag nog niet geoefend telt nog niet als breuk
+  let n = 0; while (days.has(dkey(d))) { n++; d.setDate(d.getDate() - 1); }
+  return n;
+}
+
+function render() {
+  const rows = inRange(), sk = skills(rows);
+  if (!SKILL || !sk.includes(SKILL)) {   // standaard: meest recent geoefende onderdeel met genoeg pogingen
+    const cnt = {}; rows.forEach(r => cnt[r.bron] = (cnt[r.bron] || 0) + 1);
+    SKILL = (rows.slice().reverse().find(r => cnt[r.bron] >= 10) || rows[rows.length - 1] || {}).bron || null;
+  }
+  const days = new Set(rows.map(r => r.day)).size;
+  const practice = rows.reduce((a, r) => a + Math.min(r.t, 60), 0) / 60;   // uitschieters (weggelopen) tellen max. 60 s
+  const okP = pctOk(rows);
+
+  const perSkill = sk.map(name => {
+    const rs = rows.filter(r => r.bron === name), last = rs.slice(-20), prev = rs.slice(-40, -20);
+    return { name, rs, n: rs.length, ok: pctOk(rs), med: median(rs.map(r => r.t)), best: Math.min(...rs.filter(r => r.ok).map(r => r.t)),
+      lastOk: pctOk(last), lastMed: median(last.map(r => r.t)), prevMed: prev.length >= 10 ? median(prev.map(r => r.t)) : NaN };
+  });
+
+  // Lastigste vragen: minstens 2 keer gesteld, eerst meeste fouten, dan traagst
+  const byQ = {};
+  rows.forEach(r => { const k = r.bron + '|' + r.vraag; (byQ[k] ||= { bron: r.bron, vraag: r.vraag, juist: r.juist, rs: [] }).rs.push(r); });
+  const hard = Object.values(byQ).filter(q => q.rs.length >= 2)
+    .map(q => ({ ...q, n: q.rs.length, fout: q.rs.filter(r => !r.ok).length, med: median(q.rs.map(r => r.t)) }))
+    .sort((a, b) => (b.fout / b.n) - (a.fout / a.n) || b.fout - a.fout || b.med - a.med).slice(0, 10);
+  const mistakes = rows.filter(r => !r.ok).slice(-12).reverse();
+
+  app.innerHTML = `
+    <div class="top">
+      <div><h1>Statistieken</h1><p class="muted">Alle pogingen uit <b>${esc(GH.repo)}</b>${PENDING.length ? `, plus ${PENDING.length} nog niet verstuurd` : ''}.</p></div>
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <div class="seg">${RANGES.map(([k, n]) => `<button data-range="${k}" class="${RANGE === k ? 'on' : ''}">${n}</button>`).join('')}</div>
+        <a class="btn" href="./">← Trainer</a></div>
+    </div>
+    ${!rows.length ? '<div class="panel" style="margin-top:20px"><p class="muted" style="margin:0">Nog geen pogingen in deze periode.</p></div>' : `
+    <div class="tiles">
+      <div class="tile"><div class="k">Pogingen</div><div class="v">${rows.length}</div><div class="s">${days} ${days === 1 ? 'dag' : 'dagen'} geoefend</div></div>
+      <div class="tile"><div class="k">Goed</div><div class="v">${Math.round(okP)}%</div><div class="s">${rows.filter(r => r.ok).length} van ${rows.length}</div></div>
+      <div class="tile"><div class="k">Mediane tijd</div><div class="v">${sec(median(rows.map(r => r.t)))}</div><div class="s">per vraag</div></div>
+      <div class="tile"><div class="k">Oefentijd</div><div class="v">${practice >= 60 ? nl(practice / 60) + ' u' : Math.round(practice) + ' min'}</div><div class="s">bedenktijd, geschat</div></div>
+      <div class="tile"><div class="k">Dagreeks</div><div class="v">${streakDays()}</div><div class="s">dagen op rij</div></div>
+    </div>
+
+    <h2>Activiteit</h2>
+    <div class="panel"><div class="head"><b>Pogingen per ${rows[0].day === rows[rows.length - 1].day ? 'uur' : 'dag'}</b>
+      <div class="legend"><span><i style="background:var(--good)"></i>goed</span><span><i style="background:var(--bad)"></i>fout</span></div></div>
+      <div class="chart" id="act"></div></div>
+
+    <h2>Per onderdeel</h2>
+    <div class="panel scroll"><table class="t">
+      <tr><th>Onderdeel</th><th>Pogingen</th><th>Goed</th><th>Mediaan</th><th>Snelste</th><th>Laatste 20</th><th>Tempo</th></tr>
+      ${perSkill.map(p => {
+        const d = p.lastMed - p.prevMed, trend = isNaN(d) ? '' : Math.abs(d) < 0.1 ? '' : d < 0
+          ? ` <span class="up" title="sneller dan de 20 ervoor">▼ ${nl(-d)}</span>` : ` <span class="down" title="trager dan de 20 ervoor">▲ ${nl(d)}</span>`;
+        return `<tr><td>${esc(p.name)}</td><td>${p.n}</td>
+          <td><span class="pct">${Math.round(p.ok)}%<span class="b"><span style="width:${p.ok}%"></span></span></span></td>
+          <td>${sec(p.med)}</td><td>${isFinite(p.best) ? sec(p.best) : '–'}</td>
+          <td>${Math.round(p.lastOk)}% · ${sec(p.lastMed)}${trend}</td>
+          <td data-tip="${esc(`<b>${p.name}</b><br>lopende mediaan van de tijd (per 10)`)}">${spark(p.rs)}</td></tr>`; }).join('')}
+    </table><p class="muted" style="font-size:13px;margin:10px 0 0">Mix-vragen tellen mee bij het onderdeel waar ze vandaan komen. ▼ = sneller dan de 20 pogingen daarvoor.</p></div>
+
+    <h2>Snelheid</h2>
+    <div class="panel"><div class="head">
+      <select id="skill">${sk.map(s => `<option ${s === SKILL ? 'selected' : ''}>${esc(s)}</option>`).join('')}</select>
+      <div class="legend"><span><i style="background:var(--accent);height:3px;vertical-align:3px"></i>mediaan laatste 10</span>
+        <span><i style="background:var(--muted);opacity:.5;border-radius:50%"></i>goed</span><span><i style="background:var(--bad);border-radius:50%"></i>fout</span></div></div>
+      <div class="chart" id="speed"></div>
+      <p class="muted" style="font-size:13px;margin:6px 0 0">Horizontaal: pogingnummer. Heel trage pogingen worden bovenaan afgekapt.</p></div>
+
+    <h2>Lastigste vragen</h2>
+    <div class="panel scroll">${hard.length ? `<table class="t">
+      <tr><th>Vraag</th><th>Antwoord</th><th>Gesteld</th><th>Fout</th><th>Mediaan</th></tr>
+      ${hard.map(q => `<tr><td>${esc(q.vraag)}<div class="muted" style="font-size:12px">${esc(q.bron)}</div></td><td>${esc(q.juist)}</td><td>${q.n}</td>
+        <td class="${q.fout ? 'wrong' : ''}">${q.fout}</td><td>${sec(q.med)}</td></tr>`).join('')}</table>`
+      : '<p class="muted" style="margin:0">Nog geen vraag die vaker dan één keer gesteld is.</p>'}</div>
+
+    <h2>Recente fouten</h2>
+    <div class="panel scroll">${mistakes.length ? `<table class="t">
+      <tr><th>Vraag</th><th>Jouw antwoord</th><th>Juist</th><th>Wanneer</th></tr>
+      ${mistakes.map(r => `<tr><td>${esc(r.vraag)}<div class="muted" style="font-size:12px">${esc(r.bron)}</div></td>
+        <td class="wrong">${esc(r.antwoord)}</td><td>${esc(r.juist)}</td><td class="muted">${dayLabel(r.day)} ${r.ts.slice(11, 16)}</td></tr>`).join('')}</table>`
+      : '<p class="muted" style="margin:0">Geen fouten in deze periode. 🎉</p>'}</div>`}
+    <footer>Bijgewerkt ${new Date().toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' })} · <button class="btn" id="reload" style="padding:4px 10px;font-size:13px">Opnieuw laden</button></footer>`;
+  drawCharts();
+}
+function drawCharts() {
+  const rows = inRange(), a = document.getElementById('act'), s = document.getElementById('speed');
+  if (a) activityChart(rows, a);
+  if (s) speedChart(rows.filter(r => r.bron === SKILL), s);
+}
+
+document.addEventListener('click', e => {
+  const t = e.target.closest('button'); if (!t) return;
+  if (t.dataset.range) { RANGE = t.dataset.range; render(); }
+  if (t.id === 'reload') boot();
+});
+document.addEventListener('change', e => { if (e.target.id === 'skill') { SKILL = e.target.value; drawCharts(); } });
+let rz; addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(drawCharts, 120); });
+
+async function boot() {
+  if (!GH) {
+    app.innerHTML = `<h1>Statistieken</h1><div class="panel" style="margin-top:16px"><p>Dit apparaat is niet aan GitHub gekoppeld, dus er is geen log om te bekijken.</p>
+      <a class="btn" href="./">Naar de trainer om te koppelen →</a></div>`;
+    return;
+  }
+  try { ALL = await load(); render(); }
+  catch (e) { app.innerHTML = `<h1>Statistieken</h1><div class="panel" style="margin-top:16px"><p style="color:var(--bad)">Laden mislukt: ${esc(e.message || 'geen verbinding')}</p>
+    <button class="btn" id="reload">Opnieuw proberen</button> <a class="btn" href="./">← Trainer</a></div>`; }
+}
+boot();
+</script>
+</body>
+</html>

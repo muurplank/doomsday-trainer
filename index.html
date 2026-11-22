@@ -458,7 +458,7 @@ function home() {
         : SERVER
         ? (diskOk ? 'Elke poging wordt direct naar <b>doomsday_log.csv</b> geschreven.' : '<b style="color:var(--bad)">Schrijven naar doomsday_log.csv lukt niet — draait start.command nog?</b>')
         : '<b style="color:var(--bad)">Niet gekoppeld: alles staat alleen in deze browser. Koppel GitHub hieronder.</b>'}</span>
-      <span>${LOG.length && !GH ? `<button class="btn link" id="csv">Browser-log downloaden (${LOG.length} pogingen)</button> · ` : ''}<button class="btn link" id="reset">Voortgang wissen</button></span></footer>
+      <span>${GH ? '<a class="btn link" href="stats.html">Statistieken</a> · ' : ''}${LOG.length && !GH ?`<button class="btn link" id="csv">Browser-log downloaden (${LOG.length} pogingen)</button> · ` : ''}<button class="btn link" id="reset">Voortgang wissen</button></span></footer>
     <details class="uitleg" style="margin-top:14px"><summary>Opslag op GitHub ${GH ? '— gekoppeld' : '— niet gekoppeld'}</summary><div class="body">
       ${GH ? `<p>Dit apparaat schrijft naar <b>${GH.repo}</b>.</p><button class="btn" id="ghoff">Ontkoppelen op dit apparaat</button>`
         : `<p class="muted">Eén keer per apparaat invullen. Het token blijft alleen in deze browser staan.</p>
