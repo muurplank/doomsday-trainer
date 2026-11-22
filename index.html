@@ -242,7 +242,10 @@ const yearRange = () => S.range === 'narrow' ? [1900, 2099] : [1600, 2399];
 const randYear = () => rnd(...yearRange());
 
 // ---------- Uitleg-stukjes ----------
-const whyYY = p => `<div><b>${String(p.yy).padStart(2, '0')}</b>: 12 past er <b>${p.q}×</b> in (${p.q * 12}), rest <b>${p.r}</b>, en 4 past <b>${p.f}×</b> in die rest.</div>
+const whyYY = p => `<div>Jaar <b>'${String(p.yy).padStart(2, '0')}</b></div>
+  <div>12 past er <b>${p.q}×</b> in (${p.q * 12})</div>
+  <div>rest: ${p.yy} − ${p.q * 12} = <b>${p.r}</b></div>
+  <div>4 past <b>${p.f}×</b> in die rest</div>
   <div>${p.q} + ${p.r} + ${p.f} = ${p.total} → mod 7 = <b>${p.off}</b></div>`;
 const whyCentury = p => `<div>Eeuw ${p.c}00 → anker ${dayLabel(p.anchor)}</div>`;
 const whyYear = (y, p) => whyCentury(p) + whyYY(p) +
