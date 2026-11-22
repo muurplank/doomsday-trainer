@@ -245,7 +245,13 @@ const L = id => (S.levels[id] ||= { hist: [], total: 0, correct: 0 });
 const recent = id => L(id).hist.slice(-10);
 const mastered = id => { const r = recent(id); return r.length === 10 && r.filter(h => h.ok).length >= 9; };
 const yearRange = () => S.range === 'narrow' ? [1900, 2099] : [1600, 2399];
-const randYear = () => rnd(...yearRange());
+// Moeilijkheid: hogere getallen = moeilijker (grotere twaalfvouden, grotere sommen, verder van de doomsday)
+const D = () => S.diff || 'normal';
+const byDiff = (easy, normal, hard) => D() === 'easy' ? easy : D() === 'hard' ? hard : normal;
+const randYY = () => rnd(...byDiff([0, 35], [0, 99], [48, 99]));
+const randYear = () => { const [lo, hi] = yearRange(); return rnd(lo / 100, Math.floor(hi / 100)) * 100 + randYY(); };
+const diffSeg = () => `<div class="seg">${[['easy', 'Makkelijk'], ['normal', 'Normaal'], ['hard', 'Moeilijk']].map(([k, n]) =>
+  `<button data-diff="${k}" class="${D() === k ? 'on' : ''}">${n}</button>`).join('')}</div>`;
 
 // ---------- Uitleg-stukjes ----------
 const whyYY = p => `<div class="calc">
@@ -290,11 +296,11 @@ const LEVELS = [
       <p class="muted">Ken de zevenvouden: 7, 14, 21, 28, 35, 42.</p>`,
     gen() {
       if (Math.random() < 0.5) {
-        const n = rnd(7, 41);
+        const n = rnd(...byDiff([7, 20], [7, 41], [28, 69]));
         return { key: 'm' + n, ask: 'Wat is', big: `${n} mod 7`, answer: n % 7, choices: C_07, show: String(n % 7),
           why: `<div>${n} − ${n - n % 7} = <b>${n % 7}</b></div>` };
       }
-      const d = rnd(0, 6), n = rnd(1, 6), a = (d + n) % 7;
+      const d = rnd(0, 6), n = rnd(...byDiff([1, 3], [1, 6], [4, 6])), a = (d + n) % 7;
       return { key: 'p' + d + n, ask: 'Welke dag is', big: `${cap(DAYS[d])} + ${n}`, answer: a, choices: C_WEEK, show: `${DAYS[a]} (${a})`,
         why: `<div>${DAYS[d]} = ${d}; ${d} + ${n} = ${d + n}${d + n >= 7 ? ` → − 7 = ${a}` : ''} = ${dayLabel(a)}</div>` };
     } },
@@ -313,7 +319,7 @@ const LEVELS = [
       <table class="t"><tr><th>×</th>${[1,2,3,4,5,6,7,8].map(i => `<th>${i}</th>`).join('')}</tr><tr><th>12</th>${[1,2,3,4,5,6,7,8].map(i => `<td>${i * 12}</td>`).join('')}</tr></table>
       <p>Voorbeeld: 81 → 12 past er <b>6×</b> in (72), rest <b>9</b>.</p>`,
     gen() {
-      const nums = [...Array(100).keys()];
+      const nums = [...Array(100).keys()].filter(x => byDiff(x < 48, true, x >= 48));
       const n = wpick(nums, nums.map(x => (Math.min(x % 12, 12 - x % 12) + 1) * (x > 50 ? 1.5 : 1)));
       const q = Math.floor(n / 12), r = n % 12, why = `<div>${q} × 12 = ${q * 12}, en ${n} − ${q * 12} = ${r} → <b>${q}×</b>, rest <b>${r}</b></div>`;
       return Math.random() < 0.5
@@ -326,7 +332,7 @@ const LEVELS = [
       <ul><li>hoe vaak <b>12</b> erin past</li><li>de <b>rest</b></li><li>hoe vaak <b>4</b> in die rest past</li></ul>
       <p>Daarna mod 7. Voorbeeld <b>'68</b>: 5 (5×12 = 60) + 8 (rest) + 2 (8 ÷ 4) = 15 → 15 − 14 = <b>1</b>.</p>`,
     gen() {
-      const p = yyParts(rnd(0, 99));
+      const p = yyParts(randYY());
       return { key: 'y' + p.yy, ask: 'Wat is het jaardeel (0–6) van', big: `'${String(p.yy).padStart(2, '0')}`, answer: p.off, choices: C_07, show: String(p.off), why: whyYY(p), manual: true };
     } },
 
@@ -387,7 +393,7 @@ const LEVELS = [
       const m = wpick([1,2,3,4,5,6,7,8,9,10,11,12], [1.5,1.5,1,1,1,1,1,1,1,1,1,1]);
       const leap = Math.random() < 0.5, a = monthAnchor(m, leap), n = daysIn(m, leap);
       const ds = [...Array(n).keys()].map(i => i + 1);
-      const d = wpick(ds, ds.map(x => 1 + Math.abs(x - a) ** 1.2 / 5)), off = mod(d - a, 7);
+      const d = wpick(ds, ds.map(x => { const far = Math.abs(x - a); return byDiff(far <= 6 ? 1 : 0, 1 + far ** 1.2 / 5, far >= 7 ? 1 + far ** 1.2 / 5 : 0); })), off = mod(d - a, 7);
       return { key: 'o' + m + d + leap, ask: 'Hoeveel dagen na de doomsday valt', big: `${d} ${MONTHS[m - 1]}`,
         small: leap ? 'schrikkeljaar' : 'geen schrikkeljaar', answer: off, choices: C_07, show: String(off),
         why: `<div>Doomsday in ${MONTHS[m - 1]}: de <b>${a}e</b></div><div>${d} − ${a} = ${d - a} → mod 7 = <b>${off}</b>${off ? ` (of ${off - 7})` : ''}</div>` };
@@ -432,6 +438,7 @@ function home() {
   app.innerHTML = `
     <div class="top">
       <div><h1>Doomsday trainer</h1><p class="muted">Leer elk stukje van het doomsday-algoritme los, en daarna steeds een stap erbij.</p></div>
+      <div><div class="muted" style="font-size:12px;margin-bottom:4px">Moeilijkheid</div>${diffSeg()}</div>
       <div><div class="muted" style="font-size:12px;margin-bottom:4px">Jaren</div>
         <div class="seg"><button data-range="narrow" class="${S.range === 'narrow' ? 'on' : ''}">1900–2099</button><button data-range="wide" class="${S.range !== 'narrow' ? 'on' : ''}">1600–2399</button></div></div>
     </div>
@@ -446,7 +453,7 @@ function home() {
         <div class="title">${l.title}</div><div class="desc">${l.desc}</div>
         <div class="row">${dots(l.id)}<span class="num">${st.total ? `${avgTime(l.id)} · ${st.correct}/${st.total}` : ''}</span></div>
       </button>`; }).join('')}</div>`).join('')}
-    <footer><span>Een onderdeel is gehaald bij 9 van de laatste 10 goed. ${GH
+    <footer><span>Een onderdeel is gehaald bij 9 van de laatste 10 goed. Moeilijkheid: makkelijk = lage getallen, moeilijk = hoge getallen. ${GH
         ? `Log en voortgang staan in <b>${GH.repo}</b> · <span id="sync">${syncText()}</span>`
         : SERVER
         ? (diskOk ? 'Elke poging wordt direct naar <b>doomsday_log.csv</b> geschreven.' : '<b style="color:var(--bad)">Schrijven naar doomsday_log.csv lukt niet — draait start.command nog?</b>')
@@ -466,7 +473,7 @@ function start(id) {
   const l = cur.lvl;
   app.innerHTML = `
     <div class="bar"><button class="btn" id="back">← Overzicht</button>
-      <div class="stats"><span>Reeks <b id="streak">0</b></span><span id="dots"></span><span>Gem. <b id="avg">–</b></span><span id="sync" style="font-size:12px"></span></div></div>
+      <div class="stats"><span>Reeks <b id="streak">0</b></span><span id="dots"></span><span>Gem. <b id="avg">–</b></span><span id="sync" style="font-size:12px"></span></div><span id="diffseg">${diffSeg()}</span></div>
     <div id="banner"></div>
     <details class="uitleg" ${L(id).total ? '' : 'open'}><summary>${LEVELS.indexOf(l) + 1}. ${l.title} — uitleg</summary><div class="body">${l.uitleg}</div></details>
     <div class="quiz" id="quiz"></div>
@@ -533,6 +540,7 @@ function refreshStats() {
 // ---------- Events ----------
 document.addEventListener('click', e => {
   const t = e.target.closest('button');
+  if (t && t.dataset.diff) { S.diff = t.dataset.diff; save(); if (!cur) return home(); document.getElementById('diffseg').innerHTML = diffSeg(); cur.retry = []; return ask(); }
   // Tijdens de feedback gaat elke klik door naar de volgende vraag (behalve in de uitleg of op een navigatieknop)
   if (cur && cur.state === 'fb' && !(t && (t.id === 'back' || t.dataset.go)) && !e.target.closest('details')) return ask();
   if (!t) return;
