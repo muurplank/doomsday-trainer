@@ -459,7 +459,7 @@ function start(id) {
     <div id="banner"></div>
     <details class="uitleg" ${L(id).total ? '' : 'open'}><summary>${LEVELS.indexOf(l) + 1}. ${l.title} — uitleg</summary><div class="body">${l.uitleg}</div></details>
     <div class="quiz" id="quiz"></div>
-    <div class="hint">Toetsenbord: typ het antwoord · <kbd>Enter</kbd> voor de volgende vraag · <kbd>Esc</kbd> terug naar het overzicht</div>`;
+    <div class="hint">Toetsenbord: typ het antwoord · na het antwoord: elke toets of klik = volgende vraag · <kbd>Esc</kbd> terug naar het overzicht</div>`;
   ask();
 }
 
@@ -502,7 +502,7 @@ function answer(v) {
   const fb = document.getElementById('fb');
   fb.className = 'fb ' + (ok ? 'ok' : 'no');
   fb.innerHTML = `<div class="verdict">${ok ? '✓ Goed' : `✗ Fout — het is ${q.show}`} <span class="muted" style="font-weight:400;font-size:14px">· ${t.toFixed(1)} s</span></div>
-    <div class="why">${q.why}</div>${!ok && q.manual ? '<button class="btn primary" id="nextq">Volgende (Enter)</button>' : ''}`;
+    <div class="why">${q.why}</div>${!ok && q.manual ? '<button class="btn primary" id="nextq">Volgende (klik of druk op een toets)</button>' : ''}`;
   refreshStats();
   if (!c.wasMastered && mastered(c.lvl.id)) { c.wasMastered = true; c.banner = true; showBanner(); }
   if (ok || !q.manual) c.timer = setTimeout(() => { if (cur === c && c.state === 'fb') ask(); }, ok ? 500 : 2000);
@@ -521,7 +521,10 @@ function refreshStats() {
 
 // ---------- Events ----------
 document.addEventListener('click', e => {
-  const t = e.target.closest('button'); if (!t) return;
+  const t = e.target.closest('button');
+  // Tijdens de feedback gaat elke klik door naar de volgende vraag (behalve in de uitleg of op een navigatieknop)
+  if (cur && cur.state === 'fb' && !(t && (t.id === 'back' || t.dataset.go)) && !e.target.closest('details')) return ask();
+  if (!t) return;
   if (t.dataset.go) return start(t.dataset.go);
   if (t.dataset.range) { S.range = t.dataset.range; save(); return home(); }
   if (t.id === 'back') return home();
@@ -548,7 +551,7 @@ document.addEventListener('submit', e => {
 document.addEventListener('keydown', e => {
   if (!cur || e.metaKey || e.ctrlKey || e.altKey) return;
   if (e.key === 'Escape') return home();
-  if (cur.state === 'fb') { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); ask(); } return; }
+  if (cur.state === 'fb') { e.preventDefault(); if (!e.repeat) ask(); return; }  // elke toets = volgende vraag
   if (cur.q.choices) {
     const ch = cur.q.choices.find(c => c.key === e.key.toLowerCase());
     if (ch) { e.preventDefault(); answer(ch.v); }
