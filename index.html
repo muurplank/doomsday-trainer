@@ -516,7 +516,7 @@ function answer(v) {
     <div class="why">${q.why}</div>${!ok && q.manual ? '<button class="btn primary" id="nextq">Volgende (klik of druk op een toets)</button>' : ''}`;
   refreshStats();
   if (!c.wasMastered && mastered(c.lvl.id)) { c.wasMastered = true; c.banner = true; showBanner(); }
-  if (ok || !q.manual) c.timer = setTimeout(() => { if (cur === c && c.state === 'fb') ask(); }, ok ? 500 : 2000);
+  if (ok || !q.manual) c.timer = setTimeout(() => { if (cur === c && c.state === 'fb') ask(); }, ok ? 750 : 2000);
 }
 
 function showBanner() {
