@@ -74,6 +74,8 @@
   .big { font-size: clamp(34px, 8vw, 56px); font-weight: 700; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; margin: 6px 0 2px; line-height: 1.15; }
   .big.gone { color: transparent; position: relative; }
   .big.gone::after { content: '• • •'; position: absolute; inset: 0; color: var(--line); }
+  .big.gone.peek { color: inherit; }
+  .big.gone.peek::after { content: none; }
   .small { font-size: 15px; color: var(--muted); min-height: 22px; }
   .choices { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 22px; }
   .choices button { min-width: 64px; padding: 12px 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--bg); font-size: 17px; }
@@ -254,9 +256,10 @@ const randYY = () => rnd(...byDiff([0, 35], [0, 99], [48, 99]));
 const randYear = () => { const [lo, hi] = yearRange(); return rnd(lo / 100, Math.floor(hi / 100)) * 100 + randYY(); };
 const diffSeg = () => `<div class="seg">${[['easy', 'Makkelijk'], ['normal', 'Normaal'], ['hard', 'Moeilijk']].map(([k, n]) =>
   `<button data-diff="${k}" class="${D() === k ? 'on' : ''}">${n}</button>`).join('')}</div>`;
-// Getal in beeld: 0 = altijd, anders verdwijnt het getal na zoveel seconden (uit je hoofd verder rekenen)
+// Getal in beeld: 0 = altijd, anders verdwijnt het getal na zoveel seconden (uit je hoofd verder rekenen).
+// Q ingedrukt houden laat het weer zien.
 const FLASH = () => S.flash || 0;
-const flashSeg = () => `<div class="seg">${[[0, 'Altijd'], [3, '3 s'], [2, '2 s'], [1, '1 s']].map(([k, n]) =>
+const flashSeg = () => `<div class="seg">${[[0, 'Altijd'], [3, '3 s'], [2, '2 s'], [1, '1 s'], [0.75, '0,75 s'], [0.5, '0,5 s'], [0.25, '0,25 s']].map(([k, n]) =>
   `<button data-flash="${k}" class="${FLASH() === k ? 'on' : ''}">${n}</button>`).join('')}</div>`;
 
 // ---------- Uitleg-stukjes ----------
@@ -580,9 +583,13 @@ document.addEventListener('submit', e => {
   const raw = document.getElementById('num').value.trim();
   if (/^\d+$/.test(raw)) answer(+raw);
 });
+const peek = on => { const b = document.querySelector('#quiz .big'); if (b) b.classList.toggle('peek', on); };
+document.addEventListener('keyup', e => { if (e.key.toLowerCase() === 'q') peek(false); });
+window.addEventListener('blur', () => peek(false));
 document.addEventListener('keydown', e => {
   if (!cur || e.metaKey || e.ctrlKey || e.altKey) return;
   if (e.key === 'Escape') return home();
+  if (e.key.toLowerCase() === 'q' && cur.state === 'ask') { e.preventDefault(); return peek(true); }  // Q vasthouden = getal weer tonen
   if (cur.state === 'fb') { e.preventDefault(); if (!e.repeat) ask(); return; }  // elke toets = volgende vraag
   if (cur.q.choices) {
     const ch = cur.q.choices.find(c => c.key === e.key.toLowerCase());
