@@ -247,6 +247,78 @@ function downloadCsv() {
 }
 const L = id => (S.levels[id] ||= { hist: [], total: 0, correct: 0 });
 const recent = id => L(id).hist.slice(-10);
+
+// ---------- Tempo: wat je traag of fout doet komt vaker terug (zoals "Op tempo" in de landenquiz) ----------
+// Elke vraag bestaat uit een of meer bouwstenen (q.parts, bijv. de maand en het jaardeel van een datum).
+// Per bouwsteen houden we bij hoe traag je bent t.o.v. je eigen gewone tempo in dat onderdeel:
+// r = ln(tijd) − ln(basistempo), begrensd op [−0,8; 1,0]; een fout telt als 1,2. Alleen de eerste keer per
+// sessie telt volledig (een herhaling meet vooral je kortetermijngeheugen). De volgende vraag wordt gewogen
+// getrokken: het traagste komt hooguit ~5× zo vaak als het snelste, en wat je lang niet zag komt vanzelf terug.
+const TP = { rLo: -0.8, rHi: 1.0, rErr: 1.2, n0: 2, aMin: 0.2, nMax: 20, beta: 0.4, c: 0.12, R: 5, eta: 0.05, warm: 5, cands: 24 };
+const LAMBDA = Math.log(TP.R) / 2;
+const clip = (x, a, b) => Math.min(b, Math.max(a, x));
+const today = () => Math.floor(Date.now() / 864e5);
+const stale = d => Math.min(0.8, TP.c * Math.log2(1 + Math.max(0, d)));
+const partKeys = (lid, q) => (q.parts || [q.key]).map(p => `${lid}|${p}`);
+const baseKey = (lid, q) => `${lid}|${q.choices ? 'k' + q.choices.length : 'typ'}`;
+// Opslag compact: S.tempo[item] = [m×100, n×10, dag], S.tbase[context] = [B×1000, n]
+const getItem = k => { const v = (S.tempo ||= {})[k]; return v ? { m: v[0] / 100, n: v[1] / 10, day: v[2] } : { m: 0, n: 0, day: null }; };
+const putItem = (k, it) => { S.tempo[k] = [Math.round(it.m * 100), Math.round(it.n * 10), it.day]; };
+function need(k) {
+  const it = getItem(k);
+  if (!it.n) return TP.beta;
+  return it.m + stale(today() - it.day) + TP.beta / Math.sqrt(it.n + 1);
+}
+// Bij meerdere bouwstenen telt de traagste het zwaarst (half gemiddelde, half maximum)
+const weightOf = keys => { const ns = keys.map(need), avg = ns.reduce((a, x) => a + x, 0) / ns.length;
+  return Math.exp(LAMBDA * clip((avg + Math.max(...ns)) / 2, -1, 1)); };
+
+/** Kies uit een stel gegenereerde vragen, gewogen naar hoe traag je de bouwstenen weet. */
+function tempoPick(c) {
+  const cands = [];
+  for (let i = 0; i < TP.cands; i++) {
+    const q = c.lvl.gen(); if (q.key === c.lastKey) continue;
+    const keys = partKeys(q.lid || c.lvl.id, q);
+    // Een net gestelde vraag even niet, daarna langzaam weer meedoen
+    const qk = 'Q' + (q.lid || c.lvl.id) + q.key, gap = c.seen.has(qk) ? c.n - c.seen.get(qk) : 99;
+    const f = gap <= 1 ? 0.05 : 1 - Math.exp(-(gap - 1) / 3);
+    cands.push([q, weightOf(keys) * f]);
+  }
+  if (!cands.length) return c.lvl.gen();
+  let u = Math.random() * cands.reduce((a, x) => a + x[1], 0);
+  for (const [q, w] of cands) { u -= w; if (u <= 0) return q; }
+  return cands[cands.length - 1][0];
+}
+
+/** Verwerk een antwoord (t in seconden). */
+function tempoUpdate(c, q, ok, t) {
+  const lid = q.lid || c.lvl.id, keys = partKeys(lid, q);
+  const cold = keys.map(k => !c.seen.has(k));
+  keys.forEach(k => c.seen.set(k, c.n)); c.seen.set('Q' + lid + q.key, c.n);
+  if (t < 0.25 || c.hidden) return;            // mis-klik of tabblad weg geweest: niets boeken
+  let r;
+  if (!ok) r = TP.rErr;
+  else {
+    const bk = baseKey(lid, q), lt = Math.log(t), b = (S.tbase ||= {})[bk] || [Math.round(lt * 1000), 0];
+    let B = b[0] / 1000, n = b[1];
+    if (t > Math.max(30, 6 * Math.exp(B))) return;   // afgeleid, telt niet
+    B = n < TP.warm ? (B * n + lt) / (n + 1) : B + TP.eta * clip(lt - B, -1, 1);
+    S.tbase[bk] = [Math.round(B * 1000), Math.min(n + 1, 999)];
+    r = clip(lt - B, TP.rLo, TP.rHi);
+  }
+  const share = 1 / Math.sqrt(keys.length), d = today();
+  keys.forEach((k, i) => {
+    const it = getItem(k);
+    const w = share * (cold[i] ? 1 : 0.3);
+    const rAdj = r - (it.day == null ? 0 : stale(d - it.day));
+    const a = Math.max(1 / (it.n + TP.n0), TP.aMin);
+    it.m += a * w * (rAdj - it.m);
+    it.n = Math.min(TP.nMax, it.n + w);
+    if (cold[i] || it.day == null) it.day = d;
+    putItem(k, it);
+  });
+}
+document.addEventListener('visibilitychange', () => { if (document.hidden && cur && cur.state === 'ask') cur.hidden = true; });
 const mastered = id => { const r = recent(id); return r.length === 10 && r.filter(h => h.ok).length >= 9; };
 const yearRange = () => S.range === 'narrow' ? [1900, 2099] : [1600, 2399];
 // Moeilijkheid: hogere getallen = moeilijker (grotere twaalfvouden, grotere sommen, verder van de doomsday)
@@ -256,6 +328,10 @@ const randYY = () => rnd(...byDiff([0, 35], [0, 99], [48, 99]));
 const randYear = () => { const [lo, hi] = yearRange(); return rnd(lo / 100, Math.floor(hi / 100)) * 100 + randYY(); };
 const diffSeg = () => `<div class="seg">${[['easy', 'Makkelijk'], ['normal', 'Normaal'], ['hard', 'Moeilijk']].map(([k, n]) =>
   `<button data-diff="${k}" class="${D() === k ? 'on' : ''}">${n}</button>`).join('')}</div>`;
+// Volgorde: 'normal' = willekeurig, 'tempo' = vaker wat je traag of fout doet (tijden worden altijd bijgehouden)
+const TEMPO = () => S.order === 'tempo';
+const orderSeg = () => `<div class="seg">${[['normal', 'Normaal'], ['tempo', 'Op tempo']].map(([k, n]) =>
+  `<button data-order="${k}" class="${(S.order || 'normal') === k ? 'on' : ''}" title="${k === 'tempo' ? 'Vaker wat je traag of fout doet, ook over sessies heen' : 'Willekeurige vragen'}">${n}</button>`).join('')}</div>`;
 // Getal in beeld: 0 = altijd, anders verdwijnt het getal na zoveel seconden (uit je hoofd verder rekenen).
 // Q ingedrukt houden laat het weer zien.
 const FLASH = () => S.flash || 0;
@@ -350,7 +426,7 @@ const LEVELS = [
       <p>Voorbeeld <b>1867</b>: anker 1800 = 5. Jaardeel '67: 5 + 7 + 1 = 13 → 6. Samen 5 + 6 = 11 → <b>4 = donderdag</b>.</p>`,
     gen() {
       const y = randYear(), p = yearParts(y);
-      return { key: 'j' + y, ask: 'Wat is de doomsday van', big: String(y), answer: p.dd, choices: C_WEEK, show: `${DAYS[p.dd]} (${p.dd})`, why: whyYear(y, p) };
+      return { key: 'j' + y, parts: ['c' + Math.floor(y / 100), 'y' + (y % 100)], ask: 'Wat is de doomsday van', big: String(y), answer: p.dd, choices: C_WEEK, show: `${DAYS[p.dd]} (${p.dd})`, why: whyYear(y, p) };
     } },
 
   { id: 'maandnr', group: 'De maand', title: 'Maandnummers', desc: 'Juli = 7, september = 9… snel en zonder tellen.',
@@ -374,7 +450,7 @@ const LEVELS = [
       const why = yy === 0
         ? `<div>Eeuwjaar: alleen een schrikkeljaar als het deelbaar is door 400 → ${y} is ${leap ? 'dat <b>wel</b>' : 'dat <b>niet</b>'}.</div>`
         : `<div>'${String(yy).padStart(2, '0')} is ${leap ? '' : '<b>niet</b> '}deelbaar door 4${leap ? ` (${yy} = 4 × ${yy / 4})` : ''} → ${leap ? '<b>wel</b>' : '<b>geen</b>'} schrikkeljaar.</div>`;
-      return { key: 's' + y, ask: 'Is dit een schrikkeljaar?', big: String(y), answer: leap ? 1 : 0, choices: C_YN, show: leap ? 'ja' : 'nee', why };
+      return { key: 's' + y, parts: [yy ? 'y' + yy : 'c' + y / 100], ask: 'Is dit een schrikkeljaar?', big: String(y), answer: leap ? 1 : 0, choices: C_YN, show: leap ? 'ja' : 'nee', why };
     } },
 
   { id: 'maandanker', group: 'De maand', title: 'Maand-doomsdays', desc: 'Welke datum in elke maand valt altijd op de doomsday?',
@@ -403,7 +479,7 @@ const LEVELS = [
       const leap = Math.random() < 0.5, a = monthAnchor(m, leap), n = daysIn(m, leap);
       const ds = [...Array(n).keys()].map(i => i + 1);
       const d = wpick(ds, ds.map(x => { const far = Math.abs(x - a); return byDiff(far <= 6 ? 1 : 0, 1 + far ** 1.2 / 5, far >= 7 ? 1 + far ** 1.2 / 5 : 0); })), off = mod(d - a, 7);
-      return { key: 'o' + m + d + leap, ask: 'Hoeveel dagen na de doomsday valt', big: `${d} ${MONTHS[m - 1]}`,
+      return { key: 'o' + m + d + leap, parts: ['m' + m + (m <= 2 ? leap : ''), 'k' + (d - a)], ask: 'Hoeveel dagen na de doomsday valt', big: `${d} ${MONTHS[m - 1]}`,
         small: leap ? 'schrikkeljaar' : 'geen schrikkeljaar', answer: off, choices: C_07, show: String(off),
         why: `<div>Doomsday in ${MONTHS[m - 1]}: de <b>${a}e</b></div><div>${d} − ${a} = ${d - a} → mod 7 = <b>${off}</b>${off ? ` (of ${off - 7})` : ''}</div>` };
     } },
@@ -417,7 +493,7 @@ const LEVELS = [
     gen() {
       const y = randYear(), m = rnd(1, 12), leap = isLeap(y), d = rnd(1, daysIn(m, leap));
       const p = yearParts(y), a = monthAnchor(m, leap), off = mod(d - a, 7), w = weekdayOf(y, m, d);
-      return { key: 'f' + y + m + d, ask: 'Op welke weekdag valt', big: `${d} ${MONTHS[m - 1]} ${y}`, answer: w, choices: C_WEEK, show: `${DAYS[w]} (${w})`,
+      return { key: 'f' + y + m + d, parts: ['c' + Math.floor(y / 100), 'y' + (y % 100), 'm' + m + (m <= 2 ? leap : ''), 'k' + (d - a)], ask: 'Op welke weekdag valt', big: `${d} ${MONTHS[m - 1]} ${y}`, answer: w, choices: C_WEEK, show: `${DAYS[w]} (${w})`,
         why: whyYear(y, p) + `<div>Doomsday in ${MONTHS[m - 1]}${m <= 2 ? ` (${leap ? 'schrikkeljaar' : 'geen schrikkeljaar'})` : ''}: de <b>${a}e</b>; ${d} − ${a} = ${d - a} → <b>${off}</b></div>
           <div>${p.dd} + ${off} = ${p.dd + off} → ${dayLabel(w)}</div>` };
     } },
@@ -426,7 +502,7 @@ const LEVELS = [
     uitleg: `<p>Willekeurige vragen uit alle onderdelen, om alles tegelijk scherp te houden.</p>`,
     gen() {
       const lvl = pick(LEVELS.filter(l => l.id !== 'mix')), q = lvl.gen();
-      q.tag = lvl.title; return q;
+      q.tag = lvl.title; q.lid = lvl.id; return q;
     } },
 ];
 const byId = id => LEVELS.find(l => l.id === id);
@@ -448,6 +524,7 @@ function home() {
     <div class="top">
       <div><h1>Doomsday trainer</h1><p class="muted">Leer elk stukje van het doomsday-algoritme los, en daarna steeds een stap erbij.</p></div>
       <div><div class="muted" style="font-size:12px;margin-bottom:4px">Moeilijkheid</div>${diffSeg()}</div>
+      <div><div class="muted" style="font-size:12px;margin-bottom:4px">Volgorde</div>${orderSeg()}</div>
       <div><div class="muted" style="font-size:12px;margin-bottom:4px">Getal in beeld</div>${flashSeg()}</div>
       <div><div class="muted" style="font-size:12px;margin-bottom:4px">Jaren</div>
         <div class="seg"><button data-range="narrow" class="${S.range === 'narrow' ? 'on' : ''}">1900–2099</button><button data-range="wide" class="${S.range !== 'narrow' ? 'on' : ''}">1600–2399</button></div></div>
@@ -479,15 +556,15 @@ function home() {
 }
 
 function start(id) {
-  cur = { lvl: byId(id), q: null, t0: 0, state: 'ask', streak: 0, n: 0, retry: [], lastKey: null, wasMastered: mastered(id), banner: false, timer: null };
+  cur = { lvl: byId(id), q: null, t0: 0, state: 'ask', streak: 0, n: 0, retry: [], lastKey: null, seen: new Map(), hidden: false, wasMastered: mastered(id), banner: false, timer: null };
   const l = cur.lvl;
   app.innerHTML = `
     <div class="bar"><button class="btn" id="back">← Overzicht</button>
-      <div class="stats"><span>Reeks <b id="streak">0</b></span><span id="dots"></span><span>Gem. <b id="avg">–</b></span><span id="sync" style="font-size:12px"></span></div><span style="display:flex;gap:8px;flex-wrap:wrap"><span id="diffseg">${diffSeg()}</span><span style="display:inline-flex;gap:6px;align-items:center"><span class="muted" style="font-size:13px">Getal in beeld</span><span id="flashseg">${flashSeg()}</span></span></span></div>
+      <div class="stats"><span>Reeks <b id="streak">0</b></span><span id="dots"></span><span>Gem. <b id="avg">–</b></span><span id="sync" style="font-size:12px"></span></div><span style="display:flex;gap:8px;flex-wrap:wrap"><span id="diffseg">${diffSeg()}</span><span id="orderseg">${orderSeg()}</span><span style="display:inline-flex;gap:6px;align-items:center"><span class="muted" style="font-size:13px">Getal in beeld</span><span id="flashseg">${flashSeg()}</span></span></span></div>
     <div id="banner"></div>
     <details class="uitleg" ${L(id).total ? '' : 'open'}><summary>${LEVELS.indexOf(l) + 1}. ${l.title} — uitleg</summary><div class="body">${l.uitleg}</div></details>
     <div class="quiz" id="quiz"></div>
-    <div class="hint">Toetsenbord: typ het antwoord · na het antwoord: elke toets of klik = volgende vraag · <kbd>Esc</kbd> terug naar het overzicht</div>`;
+    <div class="hint">Toetsenbord: typ het antwoord · na het antwoord: elke toets of klik = volgende vraag · <kbd>Esc</kbd> terug naar het overzicht · <kbd>Q</kbd> vasthouden = getal weer tonen<br><b>Op tempo</b>: wat je traag of fout doet komt vaker terug, ook in volgende sessies.</div>`;
   ask();
 }
 
@@ -496,8 +573,9 @@ function ask() {
   c.n++;
   const due = c.retry.findIndex(r => r.due <= c.n);
   if (due >= 0) c.q = c.retry.splice(due, 1)[0].q;
+  else if (TEMPO()) c.q = tempoPick(c);
   else { let q, tries = 0; do { q = c.lvl.gen(); } while (q.key === c.lastKey && ++tries < 6); c.q = q; }
-  c.lastKey = c.q.key; c.state = 'ask';
+  c.lastKey = c.q.key; c.state = 'ask'; c.hidden = false;
   const q = c.q;
   document.getElementById('quiz').innerHTML = `
     <div class="tag">${q.tag || ''}</div><div class="ask">${q.ask}</div><div class="big">${q.big}</div><div class="small">${q.small || ''}</div>
@@ -521,6 +599,7 @@ function answer(v) {
   const st = L(c.lvl.id);
   st.total++; if (ok) st.correct++;
   st.hist.push({ ok, t: Math.round(t * 10) / 10 }); if (st.hist.length > 50) st.hist.shift();
+  tempoUpdate(c, q, ok, t);
   save();
   logAttempt([stamp(), c.lvl.title, q.tag || c.lvl.title, plain(`${q.ask} ${q.big}${q.small ? ` (${q.small})` : ''}`),
     q.choices ? plain((q.choices.find(ch => ch.v === v) || {}).label || v).replace(/ [JN]$/, '') : v, plain(q.show), ok ? 'Ja' : 'Nee', t.toFixed(2)]);
@@ -554,6 +633,8 @@ function refreshStats() {
 // ---------- Events ----------
 document.addEventListener('click', e => {
   const t = e.target.closest('button');
+  if (t && t.dataset.order) { S.order = t.dataset.order; save(); if (!cur) return home();
+    document.getElementById('orderseg').innerHTML = orderSeg(); return cur.state === 'ask' ? ask() : undefined; }
   if (t && t.dataset.flash !== undefined) { S.flash = +t.dataset.flash; save(); if (!cur) return home();
     document.getElementById('flashseg').innerHTML = flashSeg(); return cur.state === 'ask' ? ask() : undefined; }
   if (t && t.dataset.diff) { S.diff = t.dataset.diff; save(); if (!cur) return home(); document.getElementById('diffseg').innerHTML = diffSeg(); cur.retry = []; return ask(); }
@@ -573,7 +654,7 @@ document.addEventListener('click', e => {
     ghConnect(repo, token).then(boot).catch(err => { msg.textContent = 'Mislukt: ' + err.message; });
     return;
   }
-  if (t.id === 'reset') { if (confirm('Alle voortgang wissen?')) { S.levels = {}; save(); home(); } return; }
+  if (t.id === 'reset') { if (confirm('Alle voortgang wissen?')) { S.levels = {}; S.tempo = {}; S.tbase = {}; save(); home(); } return; }
   if (t.dataset.v !== undefined && cur) answer(+t.dataset.v);
 });
 document.addEventListener('submit', e => {
