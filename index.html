@@ -418,7 +418,7 @@ const LEVELS = [
       <p>Daarna mod 7. Voorbeeld <b>'68</b>: 5 (5×12 = 60) + 8 (rest) + 2 (8 ÷ 4) = 15 → 15 − 14 = <b>1</b>.</p>`,
     gen() {
       const p = yyParts(randYY());
-      return { key: 'y' + p.yy, ask: 'Wat is het jaardeel (0–6) van', big: `'${String(p.yy).padStart(2, '0')}`, answer: p.off, choices: C_07, show: String(p.off), why: whyYY(p), manual: true };
+      return { key: 'y' + p.yy, ask: 'Wat is het jaardeel (0–6) van', big: `'${String(p.yy).padStart(2, '0')}`, answer: p.off, choices: C_07, show: String(p.off), why: whyYY(p) };
     } },
 
   { id: 'jaar', group: 'Het jaar', title: 'Doomsday van een jaar', combo: 'combinatie', desc: 'Eeuw-anker + jaardeel → de doomsday van het hele jaar.',
@@ -613,10 +613,11 @@ function answer(v) {
   const fb = document.getElementById('fb');
   fb.className = 'fb ' + (ok ? 'ok' : 'no');
   fb.innerHTML = `<div class="verdict">${ok ? '✓ Goed' : `✗ Fout — het is ${q.show}`} <span class="muted" style="font-weight:400;font-size:14px">· ${t.toFixed(1)} s</span></div>
-    <div class="why">${q.why}</div>${!ok && q.manual ? '<button class="btn primary" id="nextq">Volgende (klik of druk op een toets)</button>' : ''}`;
+    <div class="why">${q.why}</div>${!ok ? '<button class="btn primary" id="nextq">Volgende (klik of druk op een toets)</button>' : ''}`;
   refreshStats();
   if (!c.wasMastered && mastered(c.lvl.id)) { c.wasMastered = true; c.banner = true; showBanner(); }
-  if (ok || !q.manual) c.timer = setTimeout(() => { if (cur === c && c.state === 'fb') ask(); }, ok ? 750 : 2000);
+  // Goed: na 0,75 s door. Fout: blijft staan tot je klikt of een toets indrukt, zodat je de uitleg kunt lezen.
+  if (ok) c.timer = setTimeout(() => { if (cur === c && c.state === 'fb') ask(); }, 750);
 }
 
 function showBanner() {
