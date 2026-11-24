@@ -89,6 +89,18 @@
     border: 1px solid var(--line); background: var(--bg); color: var(--ink); }
   form.num input:focus { outline: 2px solid var(--accent); border-color: transparent; }
   .fb { margin-top: 20px; min-height: 96px; }
+  /* Vraag links, uitwerking van de vorige vraag rechts (op smalle schermen eronder) */
+  main:has(.quizwrap) { max-width: 1180px; }
+  .quizwrap { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 16px; align-items: start; }
+  @media (max-width: 860px) { .quizwrap { grid-template-columns: 1fr; } }
+  .prev { background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 16px 18px; font-size: 15px; }
+  .prev h3 { margin: 0 0 8px; font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; }
+  .prev .pq { color: var(--muted); font-size: 14px; }
+  .prev .pbig { font-size: 22px; font-weight: 700; margin: 2px 0 6px; font-variant-numeric: tabular-nums; }
+  .prev .pres { font-weight: 600; margin-bottom: 8px; }
+  .prev .pres.ok { color: var(--good); } .prev .pres.no { color: var(--bad); }
+  .prev .why { background: var(--bg); border-radius: 12px; padding: 10px 12px; }
+  .prev .why div + div { margin-top: 3px; }
   .fb .verdict { font-weight: 700; font-size: 18px; }
   .fb.ok .verdict { color: var(--good); } .fb.no .verdict { color: var(--bad); }
   .fb .why { margin: 8px auto 12px; max-width: 560px; font-size: 15px; text-align: left; background: var(--bg);
@@ -563,7 +575,7 @@ function start(id) {
       <div class="stats"><span>Reeks <b id="streak">0</b></span><span id="dots"></span><span>Gem. <b id="avg">–</b></span><span id="sync" style="font-size:12px"></span></div><span style="display:flex;gap:8px;flex-wrap:wrap"><span id="diffseg">${diffSeg()}</span><span id="orderseg">${orderSeg()}</span><span style="display:inline-flex;gap:6px;align-items:center"><span class="muted" style="font-size:13px">Getal in beeld</span><span id="flashseg">${flashSeg()}</span></span></span></div>
     <div id="banner"></div>
     <details class="uitleg" ${L(id).total ? '' : 'open'}><summary>${LEVELS.indexOf(l) + 1}. ${l.title} — uitleg</summary><div class="body">${l.uitleg}</div></details>
-    <div class="quiz" id="quiz"></div>
+    <div class="quizwrap"><div class="quiz" id="quiz"></div><aside class="prev" id="prev"><h3>Vorige vraag</h3><div class="muted">Hier komt de uitwerking van je vorige vraag.</div></aside></div>
     <div class="hint">Toetsenbord: typ het antwoord · na het antwoord: elke toets of klik = volgende vraag · <kbd>Esc</kbd> terug naar het overzicht · <kbd>Q</kbd> vasthouden = getal weer tonen<br><b>Op tempo</b>: wat je traag of fout doet komt vaker terug, ook in volgende sessies.</div>`;
   ask();
 }
@@ -577,6 +589,11 @@ function ask() {
   else { let q, tries = 0; do { q = c.lvl.gen(); } while (q.key === c.lastKey && ++tries < 6); c.q = q; }
   c.lastKey = c.q.key; c.state = 'ask'; c.hidden = false;
   const q = c.q;
+  if (c.prev) { const p = c.prev, pq = p.q;
+    document.getElementById('prev').innerHTML = `<h3>Vorige vraag</h3>
+      <div class="pq">${pq.tag ? pq.tag + ' · ' : ''}${pq.ask}</div><div class="pbig">${pq.big}${pq.small ? ` <span class="muted" style="font-size:14px;font-weight:400">(${pq.small})</span>` : ''}</div>
+      <div class="pres ${p.ok ? 'ok' : 'no'}">${p.ok ? `✓ ${pq.show}` : `✗ jij: ${p.mine} — goed: ${pq.show}`} <span class="muted" style="font-weight:400;font-size:13px">· ${p.t.toFixed(1)} s</span></div>
+      <div class="why">${pq.why}</div>`; }
   document.getElementById('quiz').innerHTML = `
     <div class="tag">${q.tag || ''}</div><div class="ask">${q.ask}</div><div class="big">${q.big}</div><div class="small">${q.small || ''}</div>
     ${q.choices
@@ -604,6 +621,7 @@ function answer(v) {
   logAttempt([stamp(), c.lvl.title, q.tag || c.lvl.title, plain(`${q.ask} ${q.big}${q.small ? ` (${q.small})` : ''}`),
     q.choices ? plain((q.choices.find(ch => ch.v === v) || {}).label || v).replace(/ [JN]$/, '') : v, plain(q.show), ok ? 'Ja' : 'Nee', t.toFixed(2)]);
   c.streak = ok ? c.streak + 1 : 0;
+  c.prev = { q, ok, t, mine: q.choices ? plain((q.choices.find(ch => ch.v === v) || {}).label || v).replace(/ [JN]$/, '') : v };
   if (!ok) c.retry.push({ q, due: c.n + rnd(3, 5) });
   document.querySelectorAll('.choices button').forEach(b => {
     b.disabled = true;
