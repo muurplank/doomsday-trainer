@@ -695,10 +695,11 @@ function cardOf(part) {
 const tableCards = () => [
   ...DOZENS.map(d => ({ k: 'tz' + d, card: { kind: 'Twaalftal', ask: 'Waarde van het twaalftal', front: String(d), short: `twaalftal ${d}`, ans: dozenVal(d),
     back: `<div>${d} = <b>${d / 12}</b> × 12${d / 12 >= 7 ? ` → ${d / 12} − 7 = <b>${dozenVal(d)}</b>` : ''}</div>` } })),
-  ...[...Array(12).keys()].map(x => { const f = Math.floor(x / 4), t = x + f;
+  ...[...Array(14).keys()].map(x => { const f = Math.floor(x / 4), t = x + f;   // rest 12 en 13 komen niet echt voor, maar als controle: = één twaalftal extra
     return { k: 'tr' + x, card: { kind: 'Rest', ask: 'Waarde van de rest (rest + vieren)', front: `rest ${x}`, short: `rest ${x}`, ans: restVal(x),
       back: `<div>${x} + ${f} <span class="muted">(4 past ${f}× in ${x})</span> = ${t}${t >= 7 ? ` → − 7 = <b>${restVal(x)}</b>` : ''}</div>
-        <div class="muted" style="margin-top:6px">Jaardeel = twaalftal + rest, mod 7. Bijv. '95 = 84 (0) + rest 11 (6) = 6.</div>` } }; })];
+        <div class="muted" style="margin-top:6px">${x >= 12 ? `Rest ${x} komt eigenlijk niet voor: dan past er nog een twaalftal in. Het klopt wel: één twaalftal extra (1) + rest ${x - 12} (${restVal(x - 12)}) = ${1 + restVal(x - 12)}.`
+          : "Jaardeel = twaalftal + rest, mod 7. Bijv. '95 = 84 (0) + rest 11 (6) = 6."}</div>` } }; })];
 function flashcards(lid) {
   cur = null;
   const tab = lid === 'tabellen';
