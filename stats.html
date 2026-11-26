@@ -103,7 +103,7 @@ function parseCsv(text) {
   return rows.filter(r => r.length >= 8 && r[0] !== 'Timestamp');
 }
 const toRec = r => ({ ts: r[0], day: r[0].slice(0, 10), onderdeel: r[1], bron: r[2], vraag: r[3], antwoord: r[4], juist: r[5],
-  ok: r[6] === 'Ja', t: parseFloat(r[7]) || 0, date: new Date(r[0].replace(' ', 'T')) });
+  ok: r[6] === 'Ja', t: parseFloat(r[7]) || 0, date: new Date(r[0].replace(' ', 'T')), fc: r[1] === 'Flashcards' });
 
 async function gh(path, raw) {
   const r = await fetch('https://api.github.com/repos/' + GH.repo + '/contents/' + path, { cache: 'no-store',
@@ -116,17 +116,19 @@ async function load() {
   const files = list.map(f => f.name).filter(n => /^doomsday_log_\d{4}-\d{2}\.csv$/.test(n)).sort();
   const texts = await Promise.all(files.map(f => gh(f, true)));
   const rows = texts.flatMap(parseCsv).concat(PENDING.filter(r => Array.isArray(r) && r.length >= 8).map(r => r.map(String)));
-  return rows.map(toRec).filter(r => !isNaN(r.date)).sort((a, b) => a.date - b.date);
+  const recs = rows.map(toRec).filter(r => !isNaN(r.date)).sort((a, b) => a.date - b.date);
+  FC_ALL = recs.filter(r => r.fc);      // flashcards hebben geen goed/fout: apart houden
+  return recs.filter(r => !r.fc);
 }
 
 // ---------- Staat ----------
-let ALL = [], RANGE = 'all', SKILL = null;
+let ALL = [], FC_ALL = [], RANGE = 'all', SKILL = null;
 const RANGES = [['today', 'Vandaag'], ['7', '7 dagen'], ['30', '30 dagen'], ['all', 'Alles']];
-function inRange() {
-  if (RANGE === 'all') return ALL;
+function inRange(src = ALL) {
+  if (RANGE === 'all') return src;
   const now = new Date(), from = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   if (RANGE !== 'today') from.setDate(from.getDate() - (+RANGE - 1));
-  return ALL.filter(r => r.date >= from);
+  return src.filter(r => r.date >= from);
 }
 const skills = rows => { const s = new Set(rows.map(r => r.bron)); return [...ORDER.filter(o => s.has(o)), ...[...s].filter(o => !ORDER.includes(o))]; };
 
@@ -263,6 +265,19 @@ function render() {
     .sort((a, b) => (b.fout / b.n) - (a.fout / a.n) || b.fout - a.fout || b.med - a.med).slice(0, 10);
   const mistakes = rows.filter(r => !r.ok).slice(-12).reverse();
 
+  // Flashcards: per stapel en per kaart de bedenktijd (tijd tot omdraaien), traagste kaarten eerst
+  const fcRows = inRange(FC_ALL), fcDecks = [...new Set(fcRows.map(r => r.bron))];
+  const fcCards = Object.values(fcRows.reduce((a, r) => { const k = r.bron + '|' + r.vraag; (a[k] ||= { bron: r.bron, vraag: r.vraag, juist: r.juist, ts: [] }).ts.push(Math.min(r.t, 60)); return a; }, {}))
+    .map(c => ({ ...c, n: c.ts.length, med: median(c.ts), last: c.ts[c.ts.length - 1] })).sort((a, b) => b.med - a.med);
+  const fcHtml = !fcRows.length ? '<p class="muted" style="margin:0">Nog geen flashcards bekeken in deze periode.</p>' : `
+    <table class="t"><tr><th>Stapel</th><th>Bekeken</th><th>Mediane bedenktijd</th><th>Laatste 20</th></tr>
+      ${fcDecks.map(d => { const rs = fcRows.filter(r => r.bron === d), ts = rs.map(r => Math.min(r.t, 60));
+        return `<tr><td>${esc(d.replace(/^Flashcards: /, ''))}</td><td>${rs.length}</td><td>${sec(median(ts))}</td><td>${sec(median(ts.slice(-20)))}</td></tr>`; }).join('')}</table>
+    <p class="muted" style="font-size:13px;margin:14px 0 6px">Per kaart, traagste eerst:</p>
+    <table class="t"><tr><th>Kaart</th><th>Antwoord</th><th>Bekeken</th><th>Mediaan</th><th>Laatste</th></tr>
+      ${fcCards.slice(0, 25).map(c => `<tr><td>${esc(c.vraag)}<div class="muted" style="font-size:12px">${esc(c.bron.replace(/^Flashcards: /, ''))}</div></td>
+        <td>${esc(c.juist)}</td><td>${c.n}</td><td>${sec(c.med)}</td><td>${sec(c.last)}</td></tr>`).join('')}</table>`;
+
   app.innerHTML = `
     <div class="top">
       <div><h1>Statistieken</h1><p class="muted">Alle pogingen uit <b>${esc(GH.repo)}</b>${PENDING.length ? `, plus ${PENDING.length} nog niet verstuurd` : ''}.</p></div>
@@ -318,6 +333,9 @@ function render() {
       ${hard.map(q => `<tr><td>${esc(q.vraag)}<div class="muted" style="font-size:12px">${esc(q.bron)}</div></td><td>${esc(q.juist)}</td><td>${q.n}</td>
         <td class="${q.fout ? 'wrong' : ''}">${q.fout}</td><td>${sec(q.med)}</td></tr>`).join('')}</table>`
       : '<p class="muted" style="margin:0">Nog geen vraag die vaker dan één keer gesteld is.</p>'}</div>
+
+    <h2>Flashcards</h2>
+    <div class="panel scroll">${fcHtml}<p class="muted" style="font-size:13px;margin:10px 0 0">Bedenktijd = tijd tot je de kaart omdraait. Flashcards tellen niet mee in de cijfers hierboven.</p></div>
 
     <h2>Recente fouten</h2>
     <div class="panel scroll">${mistakes.length ? `<table class="t">
