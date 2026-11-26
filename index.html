@@ -53,9 +53,7 @@
   .fc { background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 30px 20px 24px; text-align: center; cursor: pointer; min-height: 300px; }
   .fc .fcback { margin: 14px auto 0; max-width: 460px; text-align: left; background: var(--bg); border-radius: 12px; padding: 12px 14px; }
   .fc .ans { font-size: 40px; font-weight: 700; color: var(--accent); text-align: center; margin: 6px 0 2px; }
-  .fcmix { display: flex; align-items: center; gap: 12px; justify-content: center; margin: 0 0 12px; font-size: 14px; color: var(--muted); }
-  .fcmix input { width: min(320px, 50vw); accent-color: var(--accent); }
-  .fcmix b { color: var(--ink); font-variant-numeric: tabular-nums; }
+  .fcmix { display: flex; align-items: center; gap: 10px; justify-content: center; flex-wrap: wrap; margin: 0 0 12px; font-size: 13px; color: var(--muted); }
   .fclist { width: 100%; border-collapse: collapse; font-size: 14px; margin-top: 8px; }
   .fclist td, .fclist th { padding: 5px 8px; border-bottom: 1px solid var(--line); text-align: left; font-variant-numeric: tabular-nums; }
   .fclist th { color: var(--muted); font-weight: 500; font-size: 12px; }
@@ -713,11 +711,9 @@ function flashcards(lid) {
     <div class="bar"><button class="btn" id="back">← Overzicht</button>
       <div class="stats"><span>🃏 ${title}</span><span id="fcpos"></span></div>
       <button class="btn" data-go="${quizId}">Naar de quiz →</button></div>
-    ${tab ? `<div class="fcmix"><span>Twaalftal <b id="fcpz"></b></span>
-      <input type="range" id="fcmix" min="0" max="100" step="10" value="${fcRest()}" aria-label="Verhouding twaalftal en rest">
-      <span><b id="fcpr"></b> Rest</span></div>` : ''}
+    ${tab ? `<div class="fcmix"><span>Welke kaarten</span><span id="fcmixseg">${fcMixSeg()}</span></div>` : ''}
     <div class="fc" id="fccard"></div>
-    <div class="hint"><kbd>Spatie</kbd> of klik = omdraaien, nog een keer = volgende kaart · ${tab ? 'met de schuif kies je hoeveel twaalftal- en hoeveel rest-kaarten' : 'na de laatste kaart wordt opnieuw geschud'} · <kbd>Esc</kbd> terug<br>
+    <div class="hint"><kbd>Spatie</kbd> of klik = omdraaien, nog een keer = volgende kaart · ${tab ? 'boven de kaart kies je welke kaarten' : 'na de laatste kaart wordt opnieuw geschud'} · <kbd>Esc</kbd> terug<br>
       ${tab ? 'Jaardeel = waarde van het twaalftal + waarde van de rest, mod 7. Zo tel je nooit meer dan 6 + 6 op.'
         : 'Gekozen op je tempo-score: wat je in de quiz het traagst of vaakst fout doet. Flashcards tellen zelf niet mee; de lijst verandert als het in de quiz beter gaat.'}</div>
     <details class="uitleg" style="margin-top:14px"><summary>Het hele lijstje met antwoorden</summary><div class="body">
@@ -725,13 +721,14 @@ function flashcards(lid) {
       ${list.map((x, i) => `<tr id="fcrow${i}"><td>${i + 1}</td><td>${x.card.kind}</td><td><b>${x.card.short}</b></td><td>${x.card.ans}</td><td id="fct${i}">${fcTimeTxt(x.k)}</td>${tab ? '' : `<td>${x.it.m.toFixed(2)}</td>`}</tr>`).join('')}</table>
       <p class="muted" style="font-size:13px">Bedenktijd = gemiddelde tijd tot je de kaart omdraait (aantal keer bekeken).</p>
       ${tab ? '' : '<p class="muted" style="font-size:13px">Score = hoe traag je bent t.o.v. je gewone tempo in dit onderdeel (0 = normaal, 1,2 = altijd fout).</p>'}</div></details>`;
-  fcMixLabels();
   fcShow();
 }
 // Tabel-kaarten: verhouding twaalftal/rest via de schuif (S.fcRest = % rest-kaarten). Binnen elke soort een geschud stapeltje,
 // zodat alle kaarten van die soort langskomen; nooit twee keer dezelfde achter elkaar.
-const fcRest = () => S.fcRest ?? 50;
-function fcMixLabels() { const a = document.getElementById('fcpz'), b = document.getElementById('fcpr'); if (a) { a.textContent = (100 - fcRest()) + '%'; b.textContent = fcRest() + '%'; } }
+const FC_MIX = [[0, 'Alleen twaalftal'], [25, 'Meer twaalftal'], [50, 'Half-half'], [75, 'Meer rest'], [100, 'Alleen rest']];
+// Oude schuifwaarden (stappen van 10) afronden naar de dichtstbijzijnde knop
+const fcRest = () => FC_MIX.map(m => m[0]).reduce((a, b) => Math.abs(b - (S.fcRest ?? 50)) < Math.abs(a - (S.fcRest ?? 50)) ? b : a);
+const fcMixSeg = () => `<div class="seg">${FC_MIX.map(([v, n]) => `<button data-fcmix="${v}" class="${fcRest() === v ? 'on' : ''}">${n}</button>`).join('')}</div>`;
 function tabNext() {
   const p = fcRest() / 100, kind = p <= 0 ? 'tz' : p >= 1 ? 'tr' : Math.random() < p ? 'tr' : 'tz';
   const pool = fc.list.filter(x => x.k.startsWith(kind));
@@ -739,11 +736,14 @@ function tabNext() {
   if (!s || !s.length) { s = fc.sub[kind] = shuffle(pool); if (fc.cur && s[s.length - 1] === fc.cur && s.length > 1) [s[0], s[s.length - 1]] = [s[s.length - 1], s[0]]; }
   return s.pop();
 }
-document.addEventListener('input', e => {
-  if (e.target.id !== 'fcmix' || !fc) return;
-  S.fcRest = +e.target.value; save(); fcMixLabels();
-  if (!fc.shown) { fc.cur = tabNext(); fcShow(); }   // kaart die nog dicht ligt meteen volgens de nieuwe verhouding
-});
+function setFcMix(v, btn) {
+  S.fcRest = v; save();
+  document.getElementById('fcmixseg').innerHTML = fcMixSeg();
+  if (btn) btn.blur();
+  // Past de kaart die nog dicht ligt niet bij de keuze (bijv. een rest-kaart bij "Alleen twaalftal"), dan meteen een nieuwe
+  const kind = fc.cur && fc.cur.k.slice(0, 2);
+  if (!fc.shown && ((v === 0 && kind === 'tr') || (v === 100 && kind === 'tz'))) { fc.cur = tabNext(); fcShow(); }
+}
 // Statistieken: elke omgedraaide kaart gaat het log in (Onderdeel "Flashcards", Goed = "Bekeken", Tijd = bedenktijd),
 // en per kaart houden we in de voortgang [aantal, totale tijd in tienden, laatste tijd in tienden] bij.
 const fcTimeTxt = k => { const v = (S.fcStats || {})[k]; return v ? `${(v[1] / v[0] / 10).toFixed(1)} s <span class="muted">(${v[0]}×)</span>` : '–'; };
@@ -800,6 +800,7 @@ document.addEventListener('click', e => {
   const fcl = e.target.closest('[data-fc]'); if (fcl) return flashcards(fcl.dataset.fc);
   if (fc && document.getElementById('fccard')) {
     const b = e.target.closest('button');
+    if (b && b.dataset.fcmix) return setFcMix(+b.dataset.fcmix, b);
     if (!b && e.target.closest('#fccard')) return fcStep();
   }
   const t = e.target.closest('button');
@@ -841,7 +842,7 @@ document.addEventListener('keydown', e => {
   if (!cur && fc && document.getElementById('fccard') && !e.metaKey && !e.ctrlKey && !e.altKey) {
     const k = e.key.toLowerCase();
     if (k === 'escape') return home();
-    if (k === ' ' || k === 'enter' || (k === 'arrowright' && e.target.id !== 'fcmix')) { e.preventDefault(); if (!e.repeat) fcStep(); }
+    if (k === ' ' || k === 'enter' || k === 'arrowright') { e.preventDefault(); if (!e.repeat) fcStep(); }
     return;
   }
   if (!cur || e.metaKey || e.ctrlKey || e.altKey) return;
