@@ -395,6 +395,11 @@ const TABLE_EEUW = `<table class="t"><tr><th>1600</th><th>1700</th><th>1800</th>
 const TABLE_MAAND = `<div class="scroll"><table class="t"><tr>${['jan','feb','mrt','apr','mei','jun','jul','aug','sep','okt','nov','dec'].map(m => `<th>${m}</th>`).join('')}</tr>
   <tr><td>3 / <i>4</i></td><td>28 / <i>29</i></td><td>14</td><td>4</td><td>9</td><td>6</td><td>11</td><td>8</td><td>5</td><td>10</td><td>7</td><td>12</td></tr></table></div>`;
 
+// Snelle route voor het jaardeel: twee kleine tabellen. Jaardeel = waarde twaalftal + waarde rest, mod 7.
+const DOZENS = [0, 12, 24, 36, 48, 60, 72, 84, 96], dozenVal = d => (d / 12) % 7, restVal = r => (r + Math.floor(r / 4)) % 7;
+const TABLE_TABLES = `<table class="t"><tr><th>twaalftal</th>${DOZENS.map(d => `<td>${d}</td>`).join('')}</tr><tr><th>waarde</th>${DOZENS.map(d => `<td><b>${dozenVal(d)}</b></td>`).join('')}</tr></table>
+  <table class="t"><tr><th>rest</th>${[...Array(12).keys()].map(x => `<td>${x}</td>`).join('')}</tr><tr><th>waarde</th>${[...Array(12).keys()].map(x => `<td><b>${restVal(x)}</b></td>`).join('')}</tr></table>`;
+
 // ---------- De onderdelen ----------
 const LEVELS = [
   { id: 'weekdag', group: 'Basis', title: 'Weekdagnummers', desc: 'Zondag = 0 tot en met zaterdag = 6, in beide richtingen.',
@@ -448,7 +453,9 @@ const LEVELS = [
   { id: 'jaardeel', group: 'Het jaar', title: 'Jaardeel', combo: 'combinatie', desc: 'Laatste twee cijfers → getal 0–6 (twaalven + rest + vieren).',
     uitleg: `<p>Neem de laatste twee cijfers van het jaar en tel drie dingen op:</p>
       <ul><li>hoe vaak <b>12</b> erin past</li><li>de <b>rest</b></li><li>hoe vaak <b>4</b> in die rest past</li></ul>
-      <p>Daarna mod 7. Voorbeeld <b>'68</b>: 5 (5×12 = 60) + 8 (rest) + 2 (8 ÷ 4) = 15 → 15 − 14 = <b>1</b>.</p>`,
+      <p>Daarna mod 7. Voorbeeld <b>'68</b>: 5 (5×12 = 60) + 8 (rest) + 2 (8 ÷ 4) = 15 → 15 − 14 = <b>1</b>.</p>
+      <p><b>Sneller:</b> leer deze twee tabellen. Jaardeel = waarde van het twaalftal + waarde van de rest, mod 7.</p>${TABLE_TABLES}
+      <p class="muted">Voorbeeld <b>'95</b>: twaalftal 84 → 0, rest 11 → 6, samen <b>6</b>. <b>'68</b>: 60 → 5, rest 8 → 3, 5 + 3 = 8 → <b>1</b>.</p>`,
     gen() {
       const p = yyParts(randYY());
       return { key: 'y' + p.yy, ask: 'Wat is het jaardeel (0–6) van', big: `'${String(p.yy).padStart(2, '0')}`, answer: p.off, choices: C_07, show: String(p.off), why: whyYY(p) };
@@ -572,6 +579,7 @@ function home() {
           <span class="badge ${m ? 'done' : st.total ? 'busy' : ''}">${m ? '✓ gehaald' : st.total ? 'bezig' : 'nieuw'}</span></div>
         <div class="title">${l.title}</div><div class="desc">${l.desc}</div>
         <div class="row">${dots(l.id)}<span class="num">${st.total ? `${avgTime(l.id)} · ${st.correct}/${st.total}` : ''}</span></div>
+        ${['jaardeel', 'twaalf'].includes(l.id) ? `<div class="row"><span class="fclink" data-fc="tabellen">🃏 Twaalftal + rest-tabel</span></div>` : ''}
         ${FC_LEVELS.includes(l.id) && hardest(l.id).length ? `<div class="row"><span class="fclink" data-fc="${l.id}">🃏 ${Math.min(20, hardest(l.id).length)} moeilijkste als flashcards</span></div>` : ''}
       </button>`; }).join('')}</div>`).join('')}
     <footer><span>Een onderdeel is gehaald bij 9 van de laatste 10 goed. Moeilijkheid: makkelijk = lage getallen, moeilijk = hoge getallen. ${GH
@@ -684,22 +692,31 @@ function cardOf(part) {
       back: `<div>${d} → mod 7 = <b>${o}</b>: ${o} dag${o === 1 ? '' : 'en'} na de doomsday${o ? ` (of ${7 - o} ervoor)` : ' (zelfde weekdag)'}</div>` }; }
   return null;
 }
+const tableCards = () => [
+  ...DOZENS.map(d => ({ k: 'tz' + d, card: { kind: 'Twaalftal', ask: 'Waarde van het twaalftal', front: String(d), short: `twaalftal ${d}`, ans: dozenVal(d),
+    back: `<div>${d} = <b>${d / 12}</b> × 12${d / 12 >= 7 ? ` → ${d / 12} − 7 = <b>${dozenVal(d)}</b>` : ''}</div>` } })),
+  ...[...Array(12).keys()].map(x => { const f = Math.floor(x / 4), t = x + f;
+    return { k: 'tr' + x, card: { kind: 'Rest', ask: 'Waarde van de rest (rest + vieren)', front: `rest ${x}`, short: `rest ${x}`, ans: restVal(x),
+      back: `<div>${x} + ${f} <span class="muted">(4 past ${f}× in ${x})</span> = ${t}${t >= 7 ? ` → − 7 = <b>${restVal(x)}</b>` : ''}</div>
+        <div class="muted" style="margin-top:6px">Jaardeel = twaalftal + rest, mod 7. Bijv. '95 = 84 (0) + rest 11 (6) = 6.</div>` } }; })];
 function flashcards(lid) {
   cur = null;
-  const list = hardest(lid).map(x => ({ ...x, card: cardOf(x.part) })).filter(x => x.card);
+  const tab = lid === 'tabellen';
+  const list = tab ? tableCards() : hardest(lid).map(x => ({ ...x, card: cardOf(x.part) })).filter(x => x.card);
   fc = { lid, list, deck: [...list].sort(() => Math.random() - 0.5), known: new Set(), shown: false, rounds: 0 };
-  const lvl = byId(lid);
+  const title = tab ? 'Twaalftal + rest' : `${byId(lid).title}: je ${list.length} moeilijkste`, quizId = tab ? 'jaardeel' : lid;
   app.innerHTML = `
     <div class="bar"><button class="btn" id="back">← Overzicht</button>
-      <div class="stats"><span>🃏 ${lvl.title}: je ${list.length} moeilijkste</span><span>Nog <b id="fcleft">${list.length}</b></span></div>
-      <button class="btn" data-go="${lid}">Naar de quiz →</button></div>
+      <div class="stats"><span>🃏 ${title}</span><span>Nog <b id="fcleft">${list.length}</b></span></div>
+      <button class="btn" data-go="${quizId}">Naar de quiz →</button></div>
     <div class="fc" id="fccard"></div>
     <div class="hint"><kbd>Spatie</kbd> of klik = omdraaien · <kbd>J</kbd> wist ik · <kbd>N</kbd> nog niet (komt terug) · <kbd>Esc</kbd> terug<br>
-      Gekozen op je tempo-score: wat je in de quiz het traagst of vaakst fout doet. Flashcards tellen zelf niet mee; de lijst verandert als het in de quiz beter gaat.</div>
+      ${tab ? 'Jaardeel = waarde van het twaalftal + waarde van de rest, mod 7. Zo tel je nooit meer dan 6 + 6 op.'
+        : 'Gekozen op je tempo-score: wat je in de quiz het traagst of vaakst fout doet. Flashcards tellen zelf niet mee; de lijst verandert als het in de quiz beter gaat.'}</div>
     <details class="uitleg" style="margin-top:14px"><summary>Het hele lijstje met antwoorden</summary><div class="body">
       <table class="fclist"><tr><th>#</th><th>Soort</th><th>Vraag</th><th>Antwoord</th><th>Score</th></tr>
-      ${list.map((x, i) => `<tr id="fcrow${i}"><td>${i + 1}</td><td>${x.card.kind}</td><td><b>${x.card.short}</b></td><td>${x.card.ans}</td><td>${x.it.m.toFixed(2)}</td></tr>`).join('')}</table>
-      <p class="muted" style="font-size:13px">Score = hoe traag je bent t.o.v. je gewone tempo in dit onderdeel (0 = normaal, 1,2 = altijd fout).</p></div></details>`;
+      ${list.map((x, i) => `<tr id="fcrow${i}"><td>${i + 1}</td><td>${x.card.kind}</td><td><b>${x.card.short}</b></td><td>${x.card.ans}</td><td>${x.it ? x.it.m.toFixed(2) : ''}</td></tr>`).join('')}</table>
+      ${tab ? '' : '<p class="muted" style="font-size:13px">Score = hoe traag je bent t.o.v. je gewone tempo in dit onderdeel (0 = normaal, 1,2 = altijd fout).</p>'}</div></details>`;
   fcShow();
 }
 function fcShow() {
@@ -708,7 +725,7 @@ function fcShow() {
   if (!fc.list.length) { el.innerHTML = '<p class="muted">Nog geen gegevens: oefen eerst een paar rondes in de quiz.</p>'; return; }
   if (!fc.deck.length) {
     el.innerHTML = `<div class="big" style="font-size:40px">🎉</div><p>Alle ${fc.list.length} kaarten gehad${fc.rounds ? ` (${fc.rounds} keer "nog niet")` : ''}.</p>
-      <button class="btn primary" data-fcagain="1">Nog een keer</button> <button class="btn" data-go="${fc.lid}">Test het in de quiz →</button>`;
+      <button class="btn primary" data-fcagain="1">Nog een keer</button> <button class="btn" data-go="${fc.lid === 'tabellen' ? 'jaardeel' : fc.lid}">Test het in de quiz →</button>`;
     return;
   }
   const c = fc.deck[0].card;
