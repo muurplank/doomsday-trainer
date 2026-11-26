@@ -56,7 +56,6 @@
   .fclist { width: 100%; border-collapse: collapse; font-size: 14px; margin-top: 8px; }
   .fclist td, .fclist th { padding: 5px 8px; border-bottom: 1px solid var(--line); text-align: left; font-variant-numeric: tabular-nums; }
   .fclist th { color: var(--muted); font-weight: 500; font-size: 12px; }
-  .fclist .known { color: var(--good); }
   .badge { font-size: 11px; padding: 2px 8px; border-radius: 99px; border: 1px solid var(--line); color: var(--muted); white-space: nowrap; }
   .badge.done { background: var(--good-soft); color: var(--good); border-color: transparent; }
   .badge.busy { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
@@ -703,14 +702,14 @@ function flashcards(lid) {
   cur = null;
   const tab = lid === 'tabellen';
   const list = tab ? tableCards() : hardest(lid).map(x => ({ ...x, card: cardOf(x.part) })).filter(x => x.card);
-  fc = { lid, list, deck: [...list].sort(() => Math.random() - 0.5), known: new Set(), shown: false, rounds: 0 };
+  fc = { lid, list, deck: shuffle(list), i: 0, round: 1, shown: false };
   const title = tab ? 'Twaalftal + rest' : `${byId(lid).title}: je ${list.length} moeilijkste`, quizId = tab ? 'jaardeel' : lid;
   app.innerHTML = `
     <div class="bar"><button class="btn" id="back">← Overzicht</button>
-      <div class="stats"><span>🃏 ${title}</span><span>Nog <b id="fcleft">${list.length}</b></span></div>
+      <div class="stats"><span>🃏 ${title}</span><span id="fcpos"></span></div>
       <button class="btn" data-go="${quizId}">Naar de quiz →</button></div>
     <div class="fc" id="fccard"></div>
-    <div class="hint"><kbd>Spatie</kbd> of klik = omdraaien · <kbd>J</kbd> wist ik · <kbd>N</kbd> nog niet (komt terug) · <kbd>Esc</kbd> terug<br>
+    <div class="hint"><kbd>Spatie</kbd> of klik = omdraaien, nog een keer = volgende kaart · na de laatste kaart wordt opnieuw geschud · <kbd>Esc</kbd> terug<br>
       ${tab ? 'Jaardeel = waarde van het twaalftal + waarde van de rest, mod 7. Zo tel je nooit meer dan 6 + 6 op.'
         : 'Gekozen op je tempo-score: wat je in de quiz het traagst of vaakst fout doet. Flashcards tellen zelf niet mee; de lijst verandert als het in de quiz beter gaat.'}</div>
     <details class="uitleg" style="margin-top:14px"><summary>Het hele lijstje met antwoorden</summary><div class="body">
@@ -719,26 +718,26 @@ function flashcards(lid) {
       ${tab ? '' : '<p class="muted" style="font-size:13px">Score = hoe traag je bent t.o.v. je gewone tempo in dit onderdeel (0 = normaal, 1,2 = altijd fout).</p>'}</div></details>`;
   fcShow();
 }
+const shuffle = arr => { const a = [...arr]; for (let i = a.length - 1; i > 0; i--) { const j = rnd(0, i); [a[i], a[j]] = [a[j], a[i]]; } return a; };
 function fcShow() {
   const el = document.getElementById('fccard'); if (!el) return;
-  document.getElementById('fcleft').textContent = fc.deck.length;
   if (!fc.list.length) { el.innerHTML = '<p class="muted">Nog geen gegevens: oefen eerst een paar rondes in de quiz.</p>'; return; }
-  if (!fc.deck.length) {
-    el.innerHTML = `<div class="big" style="font-size:40px">🎉</div><p>Alle ${fc.list.length} kaarten gehad${fc.rounds ? ` (${fc.rounds} keer "nog niet")` : ''}.</p>
-      <button class="btn primary" data-fcagain="1">Nog een keer</button> <button class="btn" data-go="${fc.lid === 'tabellen' ? 'jaardeel' : fc.lid}">Test het in de quiz →</button>`;
-    return;
-  }
-  const c = fc.deck[0].card;
+  document.getElementById('fcpos').innerHTML = `Kaart <b>${fc.i + 1}</b>/${fc.deck.length}${fc.round > 1 ? ` · ronde ${fc.round}` : ''}`;
+  const c = fc.deck[fc.i].card;
   el.innerHTML = `<div class="tag">${c.kind}</div><div class="ask">${c.ask}</div><div class="big">${c.front}</div>
-    ${fc.shown ? `<div class="ans">${c.ans}</div><div class="fcback">${c.back}</div>
-      <div class="choices"><button data-fcok="1"><b>Wist ik</b> <kbd>J</kbd></button><button data-fcok="0"><b>Nog niet</b> <kbd>N</kbd></button></div>`
-      : '<p class="muted" style="margin-top:22px">Bedenk het antwoord, dan omdraaien (spatie of klik)</p>'}`;
+    ${fc.shown ? `<div class="ans">${c.ans}</div><div class="fcback">${c.back}</div>`
+      : '<p class="muted" style="margin-top:22px">Bedenk het antwoord · spatie of klik = omdraaien</p>'}`;
 }
-function fcAnswer(ok) {
-  if (!fc || !fc.shown || !fc.deck.length) return;
-  const x = fc.deck.shift(); fc.shown = false;
-  if (ok) { fc.known.add(x.k); const row = document.getElementById('fcrow' + fc.list.indexOf(x)); if (row) row.classList.add('known'); }
-  else { fc.rounds++; fc.deck.splice(Math.min(fc.deck.length, 3 + Math.floor(Math.random() * 3)), 0, x); }   // na 3–5 kaarten terug
+/** Spatie/klik: eerst omdraaien, daarna de volgende kaart; na de laatste opnieuw schudden (niet dezelfde kaart twee keer achter elkaar). */
+function fcStep() {
+  if (!fc || !fc.list.length) return;
+  if (!fc.shown) { fc.shown = true; return fcShow(); }
+  fc.shown = false;
+  if (++fc.i >= fc.deck.length) {
+    const last = fc.deck[fc.deck.length - 1];
+    do { fc.deck = shuffle(fc.list); } while (fc.list.length > 1 && fc.deck[0] === last);
+    fc.i = 0; fc.round++;
+  }
   fcShow();
 }
 
@@ -758,9 +757,7 @@ document.addEventListener('click', e => {
   const fcl = e.target.closest('[data-fc]'); if (fcl) return flashcards(fcl.dataset.fc);
   if (fc && document.getElementById('fccard')) {
     const b = e.target.closest('button');
-    if (b && b.dataset.fcok) return fcAnswer(b.dataset.fcok === '1');
-    if (b && b.dataset.fcagain) return flashcards(fc.lid);
-    if (!b && e.target.closest('#fccard') && !fc.shown && fc.deck.length) { fc.shown = true; return fcShow(); }
+    if (!b && e.target.closest('#fccard')) return fcStep();
   }
   const t = e.target.closest('button');
   if (t && t.dataset.order) { S.order = t.dataset.order; save(); if (!cur) return home();
@@ -801,9 +798,7 @@ document.addEventListener('keydown', e => {
   if (!cur && fc && document.getElementById('fccard') && !e.metaKey && !e.ctrlKey && !e.altKey) {
     const k = e.key.toLowerCase();
     if (k === 'escape') return home();
-    if ((k === ' ' || k === 'enter') && !fc.shown && fc.deck.length) { e.preventDefault(); fc.shown = true; return fcShow(); }
-    if (fc.shown && (k === 'j' || k === '1')) return fcAnswer(true);
-    if (fc.shown && (k === 'n' || k === '2')) return fcAnswer(false);
+    if (k === ' ' || k === 'enter' || k === 'arrowright') { e.preventDefault(); if (!e.repeat) fcStep(); }
     return;
   }
   if (!cur || e.metaKey || e.ctrlKey || e.altKey) return;
