@@ -112,6 +112,9 @@
   .calc i { font-style: normal; color: var(--muted); font-size: 14px; }
   .calc .sum { border-top: 1px solid var(--line); padding-top: 5px; margin-top: 3px; align-self: stretch; }
   .calc .res { font-size: 21px; color: var(--accent); }
+  .calc .hd { grid-column: 1 / -1; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin-top: 8px; }
+  .calc .hd:first-child { margin-top: 0; }
+  .calc .anc { color: var(--gold); }
   .hint { font-size: 13px; color: var(--muted); margin-top: 14px; }
   .banner { background: var(--good-soft); color: var(--good); border-radius: 14px; padding: 12px 16px; margin-bottom: 14px;
     display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; font-weight: 600; }
@@ -358,9 +361,18 @@ const whyYY = p => `<div class="calc">
     <span>4 past in rest</span><b>${p.f}</b><i>× 4 = ${p.f * 4}</i>
     <span class="sum">samen</span><b class="sum">${p.total}</b><i class="sum">mod 7 → <b class="res">${p.off}</b></i>
   </div>`;
-const whyCentury = p => `<div>Eeuw ${p.c}00 → anker ${dayLabel(p.anchor)}</div>`;
-const whyYear = (y, p) => whyCentury(p) + whyYY(p) +
-  `<div>${p.anchor} + ${p.off} = ${p.anchor + p.off} → doomsday ${y} = ${dayLabel(p.dd)}</div>`;
+// Doomsday van een jaar in drie stappen; het eeuw-anker in goud, het jaardeel in blauw, zodat je ziet wat waar vandaan komt.
+const whyYear = (y, p) => `<div class="calc">
+    <span class="hd">① Eeuw-anker</span>
+    <span>eeuw ${p.c}00</span><b class="anc">${p.anchor}</b><i>${DAYS[p.anchor]} (rijtje 2 – 0 – 5 – 3)</i>
+    <span class="hd">② Jaardeel van '${String(p.yy).padStart(2, '0')}</span>
+    <span>12 past erin</span><b>${p.q}</b><i>× 12 = ${p.q * 12}</i>
+    <span>rest</span><b>${p.r}</b><i>${p.yy} − ${p.q * 12}</i>
+    <span>4 past in rest</span><b>${p.f}</b><i>× 4 = ${p.f * 4}</i>
+    <span class="sum">samen</span><b class="sum">${p.total}</b><i class="sum">mod 7 → <b class="res">${p.off}</b></i>
+    <span class="hd">③ Doomsday van ${y}</span>
+    <span>anker + jaardeel</span><b>${p.anchor + p.off}</b><i><b class="anc">${p.anchor}</b> + <b class="res" style="font-size:inherit">${p.off}</b> = ${p.anchor + p.off}${p.anchor + p.off >= 7 ? ' → mod 7' : ''} → <b class="res">${p.dd}</b> = <b>${DAYS[p.dd]}</b></i>
+  </div>`;
 const MNEMO = [
   '3 januari (in een schrikkeljaar de 4e): "3 van de 4 jaren de 3e"',
   'de laatste dag van februari (28, of 29 in een schrikkeljaar)',
