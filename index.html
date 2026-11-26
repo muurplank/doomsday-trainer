@@ -53,6 +53,9 @@
   .fc { background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 30px 20px 24px; text-align: center; cursor: pointer; min-height: 300px; }
   .fc .fcback { margin: 14px auto 0; max-width: 460px; text-align: left; background: var(--bg); border-radius: 12px; padding: 12px 14px; }
   .fc .ans { font-size: 40px; font-weight: 700; color: var(--accent); text-align: center; margin: 6px 0 2px; }
+  .fcmix { display: flex; align-items: center; gap: 12px; justify-content: center; margin: 0 0 12px; font-size: 14px; color: var(--muted); }
+  .fcmix input { width: min(320px, 50vw); accent-color: var(--accent); }
+  .fcmix b { color: var(--ink); font-variant-numeric: tabular-nums; }
   .fclist { width: 100%; border-collapse: collapse; font-size: 14px; margin-top: 8px; }
   .fclist td, .fclist th { padding: 5px 8px; border-bottom: 1px solid var(--line); text-align: left; font-variant-numeric: tabular-nums; }
   .fclist th { color: var(--muted); font-weight: 500; font-size: 12px; }
@@ -702,28 +705,50 @@ function flashcards(lid) {
   cur = null;
   const tab = lid === 'tabellen';
   const list = tab ? tableCards() : hardest(lid).map(x => ({ ...x, card: cardOf(x.part) })).filter(x => x.card);
-  fc = { lid, list, deck: shuffle(list), i: 0, round: 1, shown: false };
+  fc = { lid, tab, list, deck: shuffle(list), i: 0, round: 1, count: 1, shown: false, sub: {}, cur: null };
+  if (tab) fc.cur = tabNext(); else fc.cur = fc.deck[0];
   const title = tab ? 'Twaalftal + rest' : `${byId(lid).title}: je ${list.length} moeilijkste`, quizId = tab ? 'jaardeel' : lid;
   app.innerHTML = `
     <div class="bar"><button class="btn" id="back">← Overzicht</button>
       <div class="stats"><span>🃏 ${title}</span><span id="fcpos"></span></div>
       <button class="btn" data-go="${quizId}">Naar de quiz →</button></div>
+    ${tab ? `<div class="fcmix"><span>Twaalftal <b id="fcpz"></b></span>
+      <input type="range" id="fcmix" min="0" max="100" step="10" value="${fcRest()}" aria-label="Verhouding twaalftal en rest">
+      <span><b id="fcpr"></b> Rest</span></div>` : ''}
     <div class="fc" id="fccard"></div>
-    <div class="hint"><kbd>Spatie</kbd> of klik = omdraaien, nog een keer = volgende kaart · na de laatste kaart wordt opnieuw geschud · <kbd>Esc</kbd> terug<br>
+    <div class="hint"><kbd>Spatie</kbd> of klik = omdraaien, nog een keer = volgende kaart · ${tab ? 'met de schuif kies je hoeveel twaalftal- en hoeveel rest-kaarten' : 'na de laatste kaart wordt opnieuw geschud'} · <kbd>Esc</kbd> terug<br>
       ${tab ? 'Jaardeel = waarde van het twaalftal + waarde van de rest, mod 7. Zo tel je nooit meer dan 6 + 6 op.'
         : 'Gekozen op je tempo-score: wat je in de quiz het traagst of vaakst fout doet. Flashcards tellen zelf niet mee; de lijst verandert als het in de quiz beter gaat.'}</div>
     <details class="uitleg" style="margin-top:14px"><summary>Het hele lijstje met antwoorden</summary><div class="body">
       <table class="fclist"><tr><th>#</th><th>Soort</th><th>Vraag</th><th>Antwoord</th><th>Score</th></tr>
       ${list.map((x, i) => `<tr id="fcrow${i}"><td>${i + 1}</td><td>${x.card.kind}</td><td><b>${x.card.short}</b></td><td>${x.card.ans}</td><td>${x.it ? x.it.m.toFixed(2) : ''}</td></tr>`).join('')}</table>
       ${tab ? '' : '<p class="muted" style="font-size:13px">Score = hoe traag je bent t.o.v. je gewone tempo in dit onderdeel (0 = normaal, 1,2 = altijd fout).</p>'}</div></details>`;
+  fcMixLabels();
   fcShow();
 }
+// Tabel-kaarten: verhouding twaalftal/rest via de schuif (S.fcRest = % rest-kaarten). Binnen elke soort een geschud stapeltje,
+// zodat alle kaarten van die soort langskomen; nooit twee keer dezelfde achter elkaar.
+const fcRest = () => S.fcRest ?? 50;
+function fcMixLabels() { const a = document.getElementById('fcpz'), b = document.getElementById('fcpr'); if (a) { a.textContent = (100 - fcRest()) + '%'; b.textContent = fcRest() + '%'; } }
+function tabNext() {
+  const p = fcRest() / 100, kind = p <= 0 ? 'tz' : p >= 1 ? 'tr' : Math.random() < p ? 'tr' : 'tz';
+  const pool = fc.list.filter(x => x.k.startsWith(kind));
+  let s = fc.sub[kind];
+  if (!s || !s.length) { s = fc.sub[kind] = shuffle(pool); if (fc.cur && s[s.length - 1] === fc.cur && s.length > 1) [s[0], s[s.length - 1]] = [s[s.length - 1], s[0]]; }
+  return s.pop();
+}
+document.addEventListener('input', e => {
+  if (e.target.id !== 'fcmix' || !fc) return;
+  S.fcRest = +e.target.value; save(); fcMixLabels();
+  if (!fc.shown) { fc.cur = tabNext(); fcShow(); }   // kaart die nog dicht ligt meteen volgens de nieuwe verhouding
+});
 const shuffle = arr => { const a = [...arr]; for (let i = a.length - 1; i > 0; i--) { const j = rnd(0, i); [a[i], a[j]] = [a[j], a[i]]; } return a; };
 function fcShow() {
   const el = document.getElementById('fccard'); if (!el) return;
   if (!fc.list.length) { el.innerHTML = '<p class="muted">Nog geen gegevens: oefen eerst een paar rondes in de quiz.</p>'; return; }
-  document.getElementById('fcpos').innerHTML = `Kaart <b>${fc.i + 1}</b>/${fc.deck.length}${fc.round > 1 ? ` · ronde ${fc.round}` : ''}`;
-  const c = fc.deck[fc.i].card;
+  document.getElementById('fcpos').innerHTML = fc.tab ? `Kaart <b>${fc.count}</b>`
+    : `Kaart <b>${fc.i + 1}</b>/${fc.deck.length}${fc.round > 1 ? ` · ronde ${fc.round}` : ''}`;
+  const c = fc.cur.card;
   el.innerHTML = `<div class="tag">${c.kind}</div><div class="ask">${c.ask}</div><div class="big">${c.front}</div>
     ${fc.shown ? `<div class="ans">${c.ans}</div><div class="fcback">${c.back}</div>`
       : '<p class="muted" style="margin-top:22px">Bedenk het antwoord · spatie of klik = omdraaien</p>'}`;
@@ -733,11 +758,13 @@ function fcStep() {
   if (!fc || !fc.list.length) return;
   if (!fc.shown) { fc.shown = true; return fcShow(); }
   fc.shown = false;
+  if (fc.tab) { fc.count++; fc.cur = tabNext(); return fcShow(); }
   if (++fc.i >= fc.deck.length) {
     const last = fc.deck[fc.deck.length - 1];
     do { fc.deck = shuffle(fc.list); } while (fc.list.length > 1 && fc.deck[0] === last);
     fc.i = 0; fc.round++;
   }
+  fc.cur = fc.deck[fc.i];
   fcShow();
 }
 
@@ -798,7 +825,7 @@ document.addEventListener('keydown', e => {
   if (!cur && fc && document.getElementById('fccard') && !e.metaKey && !e.ctrlKey && !e.altKey) {
     const k = e.key.toLowerCase();
     if (k === 'escape') return home();
-    if (k === ' ' || k === 'enter' || k === 'arrowright') { e.preventDefault(); if (!e.repeat) fcStep(); }
+    if (k === ' ' || k === 'enter' || (k === 'arrowright' && e.target.id !== 'fcmix')) { e.preventDefault(); if (!e.repeat) fcStep(); }
     return;
   }
   if (!cur || e.metaKey || e.ctrlKey || e.altKey) return;
