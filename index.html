@@ -703,15 +703,15 @@ function flashcards(lid) {
   cur = null;
   const tab = lid === 'tabellen';
   const list = tab ? tableCards() : hardest(lid).map(x => ({ ...x, card: cardOf(x.part) })).filter(x => x.card);
-  fc = { lid, tab, list, deck: shuffle(list), i: 0, round: 1, count: 1, shown: false, sub: {}, cur: null };
-  if (tab) fc.cur = tabNext(); else fc.cur = fc.deck[0];
+  fc = { lid, tab, list, deck: shuffle(list), i: 0, round: 1, count: 1, shown: false, sub: {}, cur: null, prev: null };
+  fc.cur = tab ? tabNext() : FC_TEMPO() ? tempoCard(list) : fc.deck[0];
   const title = tab ? 'Twaalftal + rest' : `${byId(lid).title}: je ${list.length} moeilijkste`, quizId = tab ? 'jaardeel' : lid;
   fc.deckName = tab ? 'Twaalftal + rest' : byId(lid).title;
   app.innerHTML = `
     <div class="bar"><button class="btn" id="back">← Overzicht</button>
       <div class="stats"><span>🃏 ${title}</span><span id="fcpos"></span></div>
       <button class="btn" data-go="${quizId}">Naar de quiz →</button></div>
-    ${tab ? `<div class="fcmix"><span>Welke kaarten</span><span id="fcmixseg">${fcMixSeg()}</span></div>` : ''}
+    <div class="fcmix">${tab ? `<span>Welke kaarten</span><span id="fcmixseg">${fcMixSeg()}</span>` : ''}<span>Volgorde</span><span id="fcordseg">${fcOrdSeg()}</span></div>
     <div class="fc" id="fccard"></div>
     <div class="hint"><kbd>Spatie</kbd> of klik = omdraaien, nog een keer = volgende kaart · ${tab ? 'boven de kaart kies je welke kaarten' : 'na de laatste kaart wordt opnieuw geschud'} · <kbd>Esc</kbd> terug<br>
       ${tab ? 'Jaardeel = waarde van het twaalftal + waarde van de rest, mod 7. Zo tel je nooit meer dan 6 + 6 op.'
@@ -729,9 +729,25 @@ const FC_MIX = [[0, 'Alleen twaalftal'], [25, 'Meer twaalftal'], [50, 'Half-half
 // Oude schuifwaarden (stappen van 10) afronden naar de dichtstbijzijnde knop
 const fcRest = () => FC_MIX.map(m => m[0]).reduce((a, b) => Math.abs(b - (S.fcRest ?? 50)) < Math.abs(a - (S.fcRest ?? 50)) ? b : a);
 const fcMixSeg = () => `<div class="seg">${FC_MIX.map(([v, n]) => `<button data-fcmix="${v}" class="${fcRest() === v ? 'on' : ''}">${n}</button>`).join('')}</div>`;
+// Op tempo: kaarten waar je lang over nadenkt (bedenktijd t.o.v. je eigen gemiddelde in dit stapeltje) komen vaker,
+// hooguit ~5× zo vaak als de snelste; nog niet bekeken kaarten krijgen een duwtje. Telt de recente tijden het zwaarst.
+const FC_TEMPO = () => S.fcOrder === 'tempo';
+const fcOrdSeg = () => `<div class="seg">${[['normal', 'Normaal'], ['tempo', 'Op tempo']].map(([k, n]) =>
+  `<button data-fcord="${k}" class="${(S.fcOrder || 'normal') === k ? 'on' : ''}" title="${k === 'tempo' ? 'Vaker de kaarten waar je lang over nadenkt' : 'Alle kaarten even vaak'}">${n}</button>`).join('')}</div>`;
+const fcEma = k => { const v = (S.fcStats || {})[k]; return v ? (v[3] ?? v[1] / v[0]) / 10 : null; };
+function tempoCard(pool) {
+  const known = pool.map(x => fcEma(x.k)).filter(x => x != null).map(Math.log).sort((a, b) => a - b);
+  const B = known.length ? known[known.length >> 1] : 0;
+  const cands = pool.length > 2 ? pool.filter(x => x !== fc.cur && x !== fc.prev) : pool.length > 1 ? pool.filter(x => x !== fc.cur) : pool;
+  const ws = cands.map(x => { const e = fcEma(x.k); return Math.exp(LAMBDA * clip(e == null ? TP.beta : Math.log(e) - B, -1, 1)); });
+  let u = Math.random() * ws.reduce((a, b) => a + b, 0);
+  for (let i = 0; i < cands.length; i++) { u -= ws[i]; if (u <= 0) return cands[i]; }
+  return cands[cands.length - 1];
+}
 function tabNext() {
   const p = fcRest() / 100, kind = p <= 0 ? 'tz' : p >= 1 ? 'tr' : Math.random() < p ? 'tr' : 'tz';
   const pool = fc.list.filter(x => x.k.startsWith(kind));
+  if (FC_TEMPO()) return tempoCard(pool);
   let s = fc.sub[kind];
   if (!s || !s.length) { s = fc.sub[kind] = shuffle(pool); if (fc.cur && s[s.length - 1] === fc.cur && s.length > 1) [s[0], s[s.length - 1]] = [s[s.length - 1], s[0]]; }
   return s.pop();
@@ -752,7 +768,7 @@ function fcLog() {
   if (fc.hidden || t < 0.2) return;                  // tabblad weg geweest of dubbelklik: niet meetellen
   logAttempt([stamp(), 'Flashcards', 'Flashcards: ' + fc.deckName, plain(`${c.ask} ${c.front}`), '', plain(String(c.ans)), 'Bekeken', t.toFixed(2)]);
   const v = (S.fcStats ||= {})[fc.cur.k] || [0, 0, 0], tt = Math.round(Math.min(t, 60) * 10);
-  S.fcStats[fc.cur.k] = [v[0] + 1, v[1] + tt, tt];
+  S.fcStats[fc.cur.k] = [v[0] + 1, v[1] + tt, tt, Math.round(v[0] ? 0.6 * (v[3] ?? v[1] / v[0]) + 0.4 * tt : tt)];   // [aantal, totaal, laatste, lopend gemiddelde] in tienden
   save();
   const i = fc.list.indexOf(fc.cur), cell = document.getElementById('fct' + i); if (cell) cell.innerHTML = fcTimeTxt(fc.cur.k);
 }
@@ -761,7 +777,7 @@ const shuffle = arr => { const a = [...arr]; for (let i = a.length - 1; i > 0; i
 function fcShow() {
   const el = document.getElementById('fccard'); if (!el) return;
   if (!fc.list.length) { el.innerHTML = '<p class="muted">Nog geen gegevens: oefen eerst een paar rondes in de quiz.</p>'; return; }
-  document.getElementById('fcpos').innerHTML = fc.tab ? `Kaart <b>${fc.count}</b>`
+  document.getElementById('fcpos').innerHTML = fc.tab || FC_TEMPO() ? `Kaart <b>${fc.count}</b>`
     : `Kaart <b>${fc.i + 1}</b>/${fc.deck.length}${fc.round > 1 ? ` · ronde ${fc.round}` : ''}`;
   const c = fc.cur.card;
   if (!fc.shown) { fc.t0 = performance.now(); fc.hidden = false; }
@@ -774,7 +790,9 @@ function fcStep() {
   if (!fc || !fc.list.length) return;
   if (!fc.shown) { fc.shown = true; fcLog(); return fcShow(); }
   fc.shown = false;
-  if (fc.tab) { fc.count++; fc.cur = tabNext(); return fcShow(); }
+  fc.prev = fc.cur; fc.count++;
+  if (fc.tab) { fc.cur = tabNext(); return fcShow(); }
+  if (FC_TEMPO()) { fc.cur = tempoCard(fc.list); return fcShow(); }
   if (++fc.i >= fc.deck.length) {
     const last = fc.deck[fc.deck.length - 1];
     do { fc.deck = shuffle(fc.list); } while (fc.list.length > 1 && fc.deck[0] === last);
@@ -801,6 +819,7 @@ document.addEventListener('click', e => {
   if (fc && document.getElementById('fccard')) {
     const b = e.target.closest('button');
     if (b && b.dataset.fcmix) return setFcMix(+b.dataset.fcmix, b);
+    if (b && b.dataset.fcord) { S.fcOrder = b.dataset.fcord; save(); b.blur(); document.getElementById('fcordseg').innerHTML = fcOrdSeg(); return fcShow(); }
     if (!b && e.target.closest('#fccard')) return fcStep();
   }
   const t = e.target.closest('button');
